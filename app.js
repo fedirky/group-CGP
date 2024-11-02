@@ -1,114 +1,120 @@
-// app.js
 import * as THREE from './three.r168.module.js';
-import { FlyControls } from './FlyControls.js'; // Імпорт FlyControls
-import { generateLandscape } from './terrain.js'; // Імпорт функції генерації ландшафту
+import { FlyControls } from './FlyControls.js';
+import { generateLandscape } from './terrain.js';
 
-// Ініціалізація сцени, камери та рендера
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer();
+const renderer = new THREE.WebGLRenderer({ alpha: true }); // Allow transparent background
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true; // Enable shadow maps
 document.body.appendChild(renderer.domElement);
 
-// Позиція камери для огляду на сітку кубів
+// Camera setup
 camera.position.set(10, 10, 50);
 
-// Функція для генерації чанку кубів з кольорами
-// Функція для генерації чанку кубів з кольорами
-function generateChunk(chunkX, chunkZ) {
-    const cubeSize = 1; // Зменшимо розмір кубів для більшої деталізації
-    const landscape = generateLandscape(chunkX, chunkZ);
-    
-    // Масив для зберігання позицій усіх блоків
-    const blocks = new Set(); // Використовуємо Set для унікальних координат
+// Add a directional light
+const directionalLight = new THREE.DirectionalLight(0xffffff, 1); // White light
+directionalLight.position.set(10, 20, 10); // Position the light
+directionalLight.castShadow = true; // Enable shadow casting
+scene.add(directionalLight);
 
-    // Перший прохід: розміщення кубів і збереження їх позицій
+// Configure light shadows
+directionalLight.shadow.mapSize.width = 512; // Default
+directionalLight.shadow.mapSize.height = 512; // Default
+directionalLight.shadow.camera.near = 0.5; // Default
+directionalLight.shadow.camera.far = 50; // Default
+
+const textureLoader = new THREE.TextureLoader();
+
+function generateChunk(chunkX, chunkZ) {
+    const cubeSize = 1;
+    const landscape = generateLandscape(chunkX, chunkZ);
+    const blocks = new Set();
+
     for (let x = 0; x < landscape.length; x++) {
         for (let z = 0; z < landscape[x].length; z++) {
             for (let y = 0; y < landscape[x][z].length; y++) {
                 const blockData = landscape[x][z][y];
                 const block = blockData.block;
 
-                if (block === 'air') continue; // Пропустити, якщо це повітря
+                if (block === 'air') continue;
 
-                // Зберегти позицію блоку у Set
                 blocks.add(`${chunkX + x},${y},${chunkZ + z}`);
             }
         }
     }
 
-    // Другий прохід: рендеринг кубів та перевірка сусідів
     for (let x = 0; x < landscape.length; x++) {
         for (let z = 0; z < landscape[x].length; z++) {
             for (let y = 0; y < landscape[x][z].length; y++) {
                 const blockData = landscape[x][z][y];
                 const block = blockData.block;
 
-                if (block === 'air') continue; // Пропустити, якщо це повітря
+                if (block === 'air') continue;
 
                 const position = `${chunkX + x},${y},${chunkZ + z}`;
-                
-                // Додаємо куб тільки якщо хоча б одна з граней не має сусіда
                 const shouldRender = 
-                    !blocks.has(`${chunkX + x - 1},${y},${chunkZ + z}`) || // Лівий сусід
-                    !blocks.has(`${chunkX + x + 1},${y},${chunkZ + z}`) || // Правий сусід
-                    !blocks.has(`${chunkX + x},${y - 1},${chunkZ + z}`) || // Нижній сусід
-                    !blocks.has(`${chunkX + x},${y + 1},${chunkZ + z}`) || // Верхній сусід
-                    !blocks.has(`${chunkX + x},${y},${chunkZ + z - 1}`) || // Задній сусід
-                    !blocks.has(`${chunkX + x},${y},${chunkZ + z + 1}`);   // Передній сусід
+                    !blocks.has(`${chunkX + x - 1},${y},${chunkZ + z}`) ||
+                    !blocks.has(`${chunkX + x + 1},${y},${chunkZ + z}`) ||
+                    !blocks.has(`${chunkX + x},${y - 1},${chunkZ + z}`) ||
+                    !blocks.has(`${chunkX + x},${y + 1},${chunkZ + z}`) ||
+                    !blocks.has(`${chunkX + x},${y},${chunkZ + z - 1}`) ||
+                    !blocks.has(`${chunkX + x},${y},${chunkZ + z + 1}`);
 
                 if (shouldRender) {
                     const geometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
-                    const material = new THREE.MeshBasicMaterial({ color: getBlockColor(block) });
+                    const texture = getBlockTexture(block);
+
+                    // Create the material with shadow properties
+                    const material = new THREE.MeshStandardMaterial({ map: texture }); // Use MeshStandardMaterial for shadows
+                    material.needsUpdate = true;
+
                     const cube = new THREE.Mesh(geometry, material);
-                    cube.position.set((chunkX + x) * cubeSize, y * cubeSize, (chunkZ + z) * cubeSize); // Розташування блоку
+                    cube.position.set((chunkX + x) * cubeSize, y * cubeSize, (chunkZ + z) * cubeSize);
+                    cube.castShadow = true; // Enable cube to cast shadows
+                    cube.receiveShadow = true; // Enable cube to receive shadows
                     scene.add(cube);
 
-                    // Створення контуру блоку
                     const edges = new THREE.EdgesGeometry(geometry);
-                    const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 }); // Чорний колір
+                    const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
                     const lineSegments = new THREE.LineSegments(edges, lineMaterial);
-                    lineSegments.position.copy(cube.position); // Перемістити контур на ту ж позицію
-                    scene.add(lineSegments); // Додати контур до сцени
+                    lineSegments.position.copy(cube.position);
+                    scene.add(lineSegments);
                 }
             }
         }
     }
 }
 
-// Функція для отримання кольору блоку
-function getBlockColor(block) {
+function getBlockTexture(block) {
+    let texturePath;
     switch (block) {
-        case 'water':
-            return 0x0000ff; // Синій
-        case 'sand':
-            return 0xffff00; // Жовтий
-        case 'dirt':
-            return 0x8B4513; // Коричневий
-        case 'stone':
-            return 0x808080; // Сірий
-        default:
-            return 0xffffff; // Білий за замовчуванням
+        case 'water': texturePath = './textures/water.png'; break;
+        case 'sand': texturePath = './textures/sand.png'; break;
+        case 'dirt': texturePath = './textures/dirt.png'; break;
+        case 'stone': texturePath = './textures/stone.png'; break;
+        default: texturePath = './textures/default.png'; break;
     }
+
+    const texture = textureLoader.load(texturePath);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.minFilter = THREE.NearestFilter;
+    texture.magFilter = THREE.NearestFilter;
+    return texture;
 }
 
-
-// Генерація одного чанку
 function generateSingleChunk(chunkX, chunkZ) {
-    const chunkSize = 16; // Розмір чанку 16x16
-    generateChunk(chunkX, chunkZ); // Генерація одного чанку
+    const chunkSize = 16;
+    generateChunk(chunkX, chunkZ);
 }
 
-// Виклик функції для створення одного чанку
-generateSingleChunk(0, 0); // Задайте координати для нового чанку
+generateSingleChunk(0, 0);
 
-
-// Ініціалізація FlyControls
 const controls = new FlyControls(camera, renderer.domElement);
-controls.movementSpeed = 100; // Швидкість руху
-controls.rollSpeed = 1.3; // Швидкість обертання
-controls.autoForward = false; // Автоматичний рух вперед
-controls.dragToLook = true; // Дозволити рух за допомогою миші
+controls.movementSpeed = 100;
+controls.rollSpeed = 1.3;
+controls.autoForward = false;
+controls.dragToLook = true;
 
 const fpsCounter = document.createElement('div');
 fpsCounter.style.position = 'absolute';
@@ -120,12 +126,11 @@ document.body.appendChild(fpsCounter);
 
 let frameCount = 0;
 let lastTime = performance.now();
-// Анімація для рендеру сцени
+
 function animate() {
     const currentTime = performance.now();
     frameCount++;
 
-    // Обчислення FPS
     const deltaTime = currentTime - lastTime;
     if (deltaTime >= 1000) {
         const fps = (frameCount / (deltaTime / 1000)).toFixed(2);
@@ -135,8 +140,7 @@ function animate() {
     }
 
     requestAnimationFrame(animate);
-    controls.update(0.01); // Додайте це для оновлення контролів
+    controls.update(0.01);
     renderer.render(scene, camera);
 }
 animate();
-
