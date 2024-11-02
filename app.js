@@ -24,6 +24,10 @@ directionalLight.shadow.mapSize.height = 512; // Default
 directionalLight.shadow.camera.near = 0.5; // Default
 directionalLight.shadow.camera.far = 50; // Default
 
+// Додайте амбієнтне світло
+const ambientLight = new THREE.AmbientLight(0x404040, 2); // М'яке біле світло
+scene.add(ambientLight);
+
 const textureLoader = new THREE.TextureLoader();
 
 function generateChunk(chunkX, chunkZ) {
