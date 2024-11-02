@@ -13,7 +13,7 @@ document.body.appendChild(renderer.domElement);
 camera.position.set(10, 10, 50);
 
 // Add a directional light
-const directionalLight = new THREE.DirectionalLight(0xffffff, 1); // White light
+const directionalLight = new THREE.DirectionalLight(0xffffcc, 10); // White light
 directionalLight.position.set(10, 20, 10); // Position the light
 directionalLight.castShadow = true; // Enable shadow casting
 scene.add(directionalLight);
@@ -71,8 +71,8 @@ function generateChunk(chunkX, chunkZ) {
 
                     const cube = new THREE.Mesh(geometry, material);
                     cube.position.set((chunkX + x) * cubeSize, y * cubeSize, (chunkZ + z) * cubeSize);
-                    cube.castShadow = true; // Enable cube to cast shadows
-                    cube.receiveShadow = true; // Enable cube to receive shadows
+                    cube.castShadow = false; // Disable cube from casting shadows
+                    cube.receiveShadow = false; // Disable cube from receiving shadows
                     scene.add(cube);
 
                     const edges = new THREE.EdgesGeometry(geometry);
