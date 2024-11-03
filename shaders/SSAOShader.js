@@ -1,7 +1,7 @@
 import {
 	Matrix4,
 	Vector2
-} from './three.r168.module.js';
+} from '../three.r168.module.js';
 
 /**
  * References:

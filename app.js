@@ -1,6 +1,10 @@
 import * as THREE from './three.r168.module.js';
 import { FlyControls } from './FlyControls.js';
 import { generateLandscape } from './terrain.js';
+import { EffectComposer } from './postprocessing/EffectComposer.js';
+import { RenderPass } from './postprocessing/RenderPass.js';
+import { SAOPass } from './postprocessing/SAOPass.js';
+import { OutputPass } from './postprocessing/OutputPass.js';
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -10,10 +14,10 @@ renderer.shadowMap.enabled = true; // Enable shadow maps
 document.body.appendChild(renderer.domElement);
 
 // Camera setup
-camera.position.set(10, 10, 50);
+camera.position.set(10, 10, 20);
 
 // Add a directional light
-const directionalLight = new THREE.DirectionalLight(0xffffcc, 10); // White light
+const directionalLight = new THREE.DirectionalLight(0xffffcc, 9); // White light
 directionalLight.position.set(10, 20, 10); // Position the light
 directionalLight.castShadow = true; // Enable shadow casting
 scene.add(directionalLight);
@@ -25,7 +29,7 @@ directionalLight.shadow.camera.near = 0.5; // Default
 directionalLight.shadow.camera.far = 50; // Default
 
 // Додайте амбієнтне світло
-const ambientLight = new THREE.AmbientLight(0x404040, 2); // М'яке біле світло
+const ambientLight = new THREE.AmbientLight(0x404040, 3.5); // М'яке біле світло
 scene.add(ambientLight);
 
 const textureLoader = new THREE.TextureLoader();
@@ -131,6 +135,43 @@ document.body.appendChild(fpsCounter);
 let frameCount = 0;
 let lastTime = performance.now();
 
+// Ініціалізація постобробки
+const composer = new EffectComposer(renderer);
+const renderPass = new RenderPass(scene, camera);
+composer.addPass(renderPass);
+
+// Додати SAOPass з вашими параметрами
+const saoPass = new SAOPass(scene, camera, false, true);
+composer.addPass(saoPass);
+
+saoPass.params.saoBias = 10;
+saoPass.params.saoIntensity = 0.023;
+saoPass.params.saoScale = 9.5;
+saoPass.params.saoKernelRadius = 100;
+saoPass.params.saoMinResolution = 0;
+saoPass.params.saoBlur = true;
+saoPass.params.saoBlurRadius = 20;
+saoPass.params.saoBlurStdDev = 13;
+saoPass.params.saoBlurDepthCutoff = 0.001;
+saoPass.enabled = true;
+
+// Додати OutputPass для виводу результату
+const outputPass = new OutputPass();
+composer.addPass(outputPass);
+
+// Функція для оновлення розміру композера
+function updateComposerSize() {
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    
+    renderer.setSize(width, height); // Встановити розміри рендерера
+    composer.setSize(width, height); // Встановити розміри композера
+}
+
+// Додати обробник подій для зміни розміру вікна
+window.addEventListener('resize', updateComposerSize);
+
+// Анімаційний цикл
 function animate() {
     const currentTime = performance.now();
     frameCount++;
@@ -145,6 +186,7 @@ function animate() {
 
     requestAnimationFrame(animate);
     controls.update(0.01);
-    renderer.render(scene, camera);
+    composer.render(); // Використовуємо composer для рендерингу з SAO
 }
+
 animate();
