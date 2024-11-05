@@ -28,18 +28,32 @@ directionalLight.shadow.mapSize.height = 512; // Default
 directionalLight.shadow.camera.near = 0.5; // Default
 directionalLight.shadow.camera.far = 50; // Default
 
-// Додайте амбієнтне світло
-const ambientLight = new THREE.AmbientLight(0x404040, 3.5); // М'яке біле світло
+// Add ambient light
+const ambientLight = new THREE.AmbientLight(0x404040, 3.5); // Soft white light
 scene.add(ambientLight);
 
 const textureLoader = new THREE.TextureLoader();
+
+const materials = {}; // Зберігаємо матеріали за типами блоків
+
+// Функція для отримання або створення матеріалу для типу блоку
+function getBlockMaterial(block) {
+    if (!materials[block]) {
+        const texture = getBlockTexture(block);
+        materials[block] = new THREE.MeshStandardMaterial({
+            map: texture,
+            side: THREE.DoubleSide
+        });
+    }
+    return materials[block];
+}
 
 function generateChunk(chunkX, chunkZ) {
     const cubeSize = 1;
     const landscape = generateLandscape(chunkX, chunkZ);
     const blocks = new Set();
 
-    // Collect block positions
+    // Збір позицій блоків
     for (let x = 0; x < landscape.length; x++) {
         for (let z = 0; z < landscape[x].length; z++) {
             for (let y = 0; y < landscape[x][z].length; y++) {
@@ -51,7 +65,7 @@ function generateChunk(chunkX, chunkZ) {
         }
     }
 
-    // Render quads for each side
+    // Рендеринг площин для кожної сторони
     for (let x = 0; x < landscape.length; x++) {
         for (let z = 0; z < landscape[x].length; z++) {
             for (let y = 0; y < landscape[x][z].length; y++) {
@@ -63,26 +77,31 @@ function generateChunk(chunkX, chunkZ) {
                 const posX = chunkX + x;
                 const posY = y;
                 const posZ = chunkZ + z;
-                const texture = getBlockTexture(block);
-                const material = new THREE.MeshStandardMaterial({ map: texture, side: THREE.DoubleSide });
+                
+                // Отримуємо матеріал для поточного типу блоку
+                const material = getBlockMaterial(block);
 
-                // Check each side for a neighboring block
+                // Перевірка сусідніх блоків
                 const directions = [
                     { offset: [-1, 0, 0], position: [posX - 1, posY, posZ], rotation: [0, Math.PI / 2, 0] }, // Left
-                    { offset: [1, 0, 0], position: [posX + 1, posY, posZ], rotation: [0, -Math.PI / 2, 0] },  // Right
-                    { offset: [0, -1, 0], position: [posX, posY - 1, posZ], rotation: [Math.PI / 2, 0, 0] },  // Bottom
+                    { offset: [1, 0, 0], position: [posX + 1, posY, posZ], rotation: [0, -Math.PI / 2, 0] }, // Right
+                    { offset: [0, -1, 0], position: [posX, posY - 1, posZ], rotation: [Math.PI / 2, 0, 0] }, // Bottom
                     { offset: [0, 1, 0], position: [posX, posY + 1, posZ], rotation: [-Math.PI / 2, 0, 0] }, // Top
-                    { offset: [0, 0, -1], position: [posX, posY, posZ - 1], rotation: [0, 0, 0] },            // Front
+                    { offset: [0, 0, -1], position: [posX, posY, posZ - 1], rotation: [0, 0, 0] },           // Front
                     { offset: [0, 0, 1], position: [posX, posY, posZ + 1], rotation: [0, Math.PI, 0] }       // Back
                 ];
 
-                // Render a quad for each visible side
+                // Рендеринг площини для кожної видимої сторони
                 directions.forEach(({ offset, position, rotation }) => {
                     const neighborKey = `${position[0]},${position[1]},${position[2]}`;
                     if (!blocks.has(neighborKey)) {
                         const quadGeometry = new THREE.PlaneGeometry(cubeSize, cubeSize);
                         const quad = new THREE.Mesh(quadGeometry, material);
-                        quad.position.set(posX * cubeSize + offset[0] * cubeSize / 2, posY * cubeSize + offset[1] * cubeSize / 2, posZ * cubeSize + offset[2] * cubeSize / 2);
+                        quad.position.set(
+                            posX * cubeSize + offset[0] * cubeSize / 2,
+                            posY * cubeSize + offset[1] * cubeSize / 2,
+                            posZ * cubeSize + offset[2] * cubeSize / 2
+                        );
                         quad.rotation.set(rotation[0], rotation[1], rotation[2]);
                         scene.add(quad);
                     }
@@ -115,7 +134,16 @@ function generateSingleChunk(chunkX, chunkZ) {
     generateChunk(chunkX, chunkZ);
 }
 
-generateSingleChunk(0, 0);
+// Generate 4 chunks in a 2x2 grid
+const chunkSize = 16; // Size of each chunk (optional, if you have a specific size)
+const numChunksX = 2; // Number of chunks in the X direction
+const numChunksZ = 1; // Number of chunks in the Z direction
+
+for (let i = 0; i < numChunksX; i++) {
+    for (let j = 0; j < numChunksZ; j++) {
+        generateSingleChunk(i * chunkSize, j * chunkSize);
+    }
+}
 
 const controls = new FlyControls(camera, renderer.domElement);
 controls.movementSpeed = 20;
@@ -134,12 +162,22 @@ document.body.appendChild(fpsCounter);
 let frameCount = 0;
 let lastTime = performance.now();
 
-// Ініціалізація постобробки
+function countVertices() {
+    let vertexCount = 0;
+    scene.traverse((object) => {
+        if (object.isMesh) {
+            vertexCount += object.geometry.attributes.position.count; // Count vertices
+        }
+    });
+    return vertexCount;
+}
+
+// Initialize post-processing
 const composer = new EffectComposer(renderer);
 const renderPass = new RenderPass(scene, camera);
 composer.addPass(renderPass);
 
-// Додати SAOPass з вашими параметрами
+// Add SAOPass with your parameters
 const saoPass = new SAOPass(scene, camera);
 composer.addPass(saoPass);
 
@@ -155,20 +193,20 @@ saoPass.params.saoBlurDepthCutoff = 0.001;
 saoPass.normalMaterial.side = THREE.DoubleSide;
 saoPass.enabled = true;
 
-// Додати OutputPass для виводу результату
+// Add OutputPass for output result
 const outputPass = new OutputPass();
 composer.addPass(outputPass);
 
-// Функція для оновлення розміру композера
+// Function to update composer size
 function updateComposerSize() {
     const width = window.innerWidth;
     const height = window.innerHeight;
     
-    renderer.setSize(width, height); // Встановити розміри рендерера
-    composer.setSize(width, height); // Встановити розміри композера
+    renderer.setSize(width, height); // Set renderer size
+    composer.setSize(width, height); // Set composer size
 }
 
-// Додати обробник подій для зміни розміру вікна
+// Add event handler for window resize
 window.addEventListener('resize', updateComposerSize);
 
 function adjustSAOScale() {
@@ -176,7 +214,7 @@ function adjustSAOScale() {
     saoPass.params.saoScale = 128 * 2.5 / distance; // Scale down with distance
 }
 
-// Анімаційний цикл
+// Animation loop
 function animate() {
     const currentTime = performance.now();
     frameCount++;
@@ -184,15 +222,16 @@ function animate() {
     const deltaTime = currentTime - lastTime;
     if (deltaTime >= 1000) {
         const fps = (frameCount / (deltaTime / 1000)).toFixed(2);
-        fpsCounter.textContent = `FPS: ${fps}`;
+        const vertices = countVertices(); // Count vertices
+        fpsCounter.textContent = `FPS: ${fps}, Vertices: ${vertices}`; // Output FPS and vertex count
         frameCount = 0;
         lastTime = currentTime;
     }
 
     requestAnimationFrame(animate);
     controls.update(0.01);
-    // adjustSAOScale(); // Adjust SAO scale based on distance
-    composer.render(); // Використовуємо composer для рендерингу з SAO
+    //adjustSAOScale(); // Adjust SAO scale based on distance
+    composer.render(); // Use composer for rendering with SAO
 }
 
 animate();
