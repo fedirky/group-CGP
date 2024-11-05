@@ -6,6 +6,7 @@ import { RenderPass } from './postprocessing/RenderPass.js';
 import { SAOPass } from './postprocessing/SAOPass.js';
 import { OutputPass } from './postprocessing/OutputPass.js';
 
+
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ alpha: true }); // Allow transparent background
@@ -33,84 +34,8 @@ const ambientLight = new THREE.AmbientLight(0x404040, 3.5); // Soft white light
 scene.add(ambientLight);
 
 const textureLoader = new THREE.TextureLoader();
-
-const materials = {}; // Зберігаємо матеріали за типами блоків
-
-// Функція для отримання або створення матеріалу для типу блоку
-function getBlockMaterial(block) {
-    if (!materials[block]) {
-        const texture = getBlockTexture(block);
-        materials[block] = new THREE.MeshStandardMaterial({
-            map: texture,
-            side: THREE.DoubleSide
-        });
-    }
-    return materials[block];
-}
-
-function generateChunk(chunkX, chunkZ) {
-    const cubeSize = 1;
-    const landscape = generateLandscape(chunkX, chunkZ);
-    const blocks = new Set();
-
-    // Збір позицій блоків
-    for (let x = 0; x < landscape.length; x++) {
-        for (let z = 0; z < landscape[x].length; z++) {
-            for (let y = 0; y < landscape[x][z].length; y++) {
-                const blockData = landscape[x][z][y];
-                if (blockData.block !== 'air') {
-                    blocks.add(`${chunkX + x},${y},${chunkZ + z}`);
-                }
-            }
-        }
-    }
-
-    // Рендеринг площин для кожної сторони
-    for (let x = 0; x < landscape.length; x++) {
-        for (let z = 0; z < landscape[x].length; z++) {
-            for (let y = 0; y < landscape[x][z].length; y++) {
-                const blockData = landscape[x][z][y];
-                const block = blockData.block;
-
-                if (block === 'air') continue;
-
-                const posX = chunkX + x;
-                const posY = y;
-                const posZ = chunkZ + z;
-                
-                // Отримуємо матеріал для поточного типу блоку
-                const material = getBlockMaterial(block);
-
-                // Перевірка сусідніх блоків
-                const directions = [
-                    { offset: [-1, 0, 0], position: [posX - 1, posY, posZ], rotation: [0, Math.PI / 2, 0] }, // Left
-                    { offset: [1, 0, 0], position: [posX + 1, posY, posZ], rotation: [0, -Math.PI / 2, 0] }, // Right
-                    { offset: [0, -1, 0], position: [posX, posY - 1, posZ], rotation: [Math.PI / 2, 0, 0] }, // Bottom
-                    { offset: [0, 1, 0], position: [posX, posY + 1, posZ], rotation: [-Math.PI / 2, 0, 0] }, // Top
-                    { offset: [0, 0, -1], position: [posX, posY, posZ - 1], rotation: [0, 0, 0] },           // Front
-                    { offset: [0, 0, 1], position: [posX, posY, posZ + 1], rotation: [0, Math.PI, 0] }       // Back
-                ];
-
-                // Рендеринг площини для кожної видимої сторони
-                directions.forEach(({ offset, position, rotation }) => {
-                    const neighborKey = `${position[0]},${position[1]},${position[2]}`;
-                    if (!blocks.has(neighborKey)) {
-                        const quadGeometry = new THREE.PlaneGeometry(cubeSize, cubeSize);
-                        const quad = new THREE.Mesh(quadGeometry, material);
-                        quad.position.set(
-                            posX * cubeSize + offset[0] * cubeSize / 2,
-                            posY * cubeSize + offset[1] * cubeSize / 2,
-                            posZ * cubeSize + offset[2] * cubeSize / 2
-                        );
-                        quad.rotation.set(rotation[0], rotation[1], rotation[2]);
-                        scene.add(quad);
-                    }
-                });
-            }
-        }
-    }
-}
-
+const materials = {};
+const meshes = {}; // Store arrays of InstancedMeshes by block type
 
 function getBlockTexture(block) {
     let texturePath;
@@ -129,10 +54,105 @@ function getBlockTexture(block) {
     return texture;
 }
 
-function generateSingleChunk(chunkX, chunkZ) {
-    const chunkSize = 16;
-    generateChunk(chunkX, chunkZ);
+function getBlockMaterial(block) {
+    if (!materials[block]) {
+        const texture = getBlockTexture(block);
+        materials[block] = new THREE.MeshStandardMaterial({
+            map: texture,
+            side: THREE.DoubleSide
+        });
+    }
+    return materials[block];
 }
+
+// Helper to get or create an InstancedMesh array for a given block type
+function getInstancedMeshes(block) {
+    if (!meshes[block]) {
+        meshes[block] = []; // Initialize as an array to hold multiple InstancedMeshes if needed
+    }
+    return meshes[block];
+}
+
+function renderChunk(chunkX, chunkZ) {
+    const cubeSize = 1;
+    const landscape = generateLandscape(chunkX, chunkZ);
+    const maxInstancesPerMesh = 512;
+    const tempMatrix = new THREE.Matrix4();
+
+    // Define directions and rotations for each face of the cube
+    const directions = [
+        { offset: [-1, 0, 0], rotation: [0, Math.PI / 2, 0] },   // Left
+        { offset: [1, 0, 0], rotation: [0, -Math.PI / 2, 0] },   // Right
+        { offset: [0, -1, 0], rotation: [Math.PI / 2, 0, 0] },   // Bottom
+        { offset: [0, 1, 0], rotation: [-Math.PI / 2, 0, 0] },   // Top
+        { offset: [0, 0, -1], rotation: [0, 0, 0] },             // Front
+        { offset: [0, 0, 1], rotation: [0, Math.PI, 0] }         // Back
+    ];
+
+    for (let x = 0; x < landscape.length; x++) {
+        for (let z = 0; z < landscape[x].length; z++) {
+            for (let y = 0; y < landscape[x][z].length; y++) {
+                const blockData = landscape[x][z][y];
+                const block = blockData.block;
+                if (block === 'air') continue;
+
+                const posX = chunkX + x;
+                const posY = y;
+                const posZ = chunkZ + z;
+
+                const instancedMeshes = getInstancedMeshes(block);
+                let instancedMesh = instancedMeshes[instancedMeshes.length - 1];
+
+                if (!instancedMesh || instancedMesh.count >= maxInstancesPerMesh) {
+                    const geometry = new THREE.PlaneGeometry(cubeSize, cubeSize);
+                    const material = getBlockMaterial(block);
+                    instancedMesh = new THREE.InstancedMesh(geometry, material, maxInstancesPerMesh);
+                    instancedMesh.count = 0; // Track instance count per mesh
+                    instancedMeshes.push(instancedMesh);
+                    scene.add(instancedMesh);
+                }
+
+                directions.forEach(({ offset, rotation }) => {
+                    const [nx, ny, nz] = [x + offset[0], y + offset[1], z + offset[2]];
+
+                    if (
+                        nx < 0 || nx >= landscape.length ||
+                        nz < 0 || nz >= landscape[0].length ||
+                        ny < 0 || ny >= landscape[0][0].length ||
+                        landscape[nx]?.[nz]?.[ny]?.block === 'air'
+                    ) {
+                        tempMatrix.compose(
+                            new THREE.Vector3(
+                                posX * cubeSize + offset[0] * cubeSize / 2,
+                                posY * cubeSize + offset[1] * cubeSize / 2,
+                                posZ * cubeSize + offset[2] * cubeSize / 2
+                            ),
+                            new THREE.Quaternion().setFromEuler(new THREE.Euler(...rotation)),
+                            new THREE.Vector3(1, 1, 1)
+                        );
+                        instancedMesh.setMatrixAt(instancedMesh.count++, tempMatrix);
+                    }
+                });
+            }
+        }
+    }
+
+    Object.values(meshes).forEach(instancedMeshes => {
+        instancedMeshes.forEach(mesh => {
+            mesh.instanceMatrix.needsUpdate = true;
+        });
+    });
+}
+
+
+function renderSingleChunk(chunkX, chunkZ) {
+    const chunkSize = 16;
+    renderChunk(chunkX, chunkZ);
+}
+
+
+let frameCount = 0;
+let lastTime = performance.now();
 
 // Generate 4 chunks in a 2x2 grid
 const chunkSize = 16; // Size of each chunk (optional, if you have a specific size)
@@ -141,7 +161,7 @@ const numChunksZ = 1; // Number of chunks in the Z direction
 
 for (let i = 0; i < numChunksX; i++) {
     for (let j = 0; j < numChunksZ; j++) {
-        generateSingleChunk(i * chunkSize, j * chunkSize);
+        renderSingleChunk(i * chunkSize, j * chunkSize);
     }
 }
 
@@ -159,8 +179,6 @@ fpsCounter.style.color = '#000000';
 fpsCounter.style.fontSize = '16px';
 document.body.appendChild(fpsCounter);
 
-let frameCount = 0;
-let lastTime = performance.now();
 
 function countVertices() {
     let vertexCount = 0;
