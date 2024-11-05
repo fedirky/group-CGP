@@ -8,6 +8,7 @@ import { OutputPass } from './postprocessing/OutputPass.js';
 
 
 const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87CEEB);
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ alpha: true }); // Allow transparent background
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -119,7 +120,8 @@ function renderChunk(chunkX, chunkZ) {
                         nx < 0 || nx >= landscape.length ||
                         nz < 0 || nz >= landscape[0].length ||
                         ny < 0 || ny >= landscape[0][0].length ||
-                        landscape[nx]?.[nz]?.[ny]?.block === 'air'
+                        landscape[nx]?.[nz]?.[ny]?.block === 'air' ||
+                        !landscape[nx]?.[nz]?.[ny]
                     ) {
                         tempMatrix.compose(
                             new THREE.Vector3(
@@ -157,13 +159,56 @@ let lastTime = performance.now();
 // Generate 4 chunks in a 2x2 grid
 const chunkSize = 16; // Size of each chunk (optional, if you have a specific size)
 const numChunksX = 2; // Number of chunks in the X direction
-const numChunksZ = 1; // Number of chunks in the Z direction
+const numChunksZ = 2; // Number of chunks in the Z direction
 
 for (let i = 0; i < numChunksX; i++) {
     for (let j = 0; j < numChunksZ; j++) {
         renderSingleChunk(i * chunkSize, j * chunkSize);
     }
 }
+
+function createClouds() {
+    const cloudGroup = new THREE.Group();
+    const cloudCount = 50;
+    const minWidth = 10, maxWidth = 40;
+    const minHeight = 2, maxHeight = 5;
+    const minAltitude = 30, maxAltitude = 80;
+    const spreadDistance = 500;
+
+    for (let i = 0; i < cloudCount; i++) {
+        const width = THREE.MathUtils.lerp(minWidth, maxWidth, Math.random());
+        const height = THREE.MathUtils.lerp(minHeight, maxHeight, Math.random());
+        const altitude = THREE.MathUtils.lerp(minAltitude, maxAltitude, Math.random());
+        const distance = THREE.MathUtils.randFloat(0, spreadDistance);
+        const angle = Math.random() * Math.PI * 2;
+
+        const cloudGeometry = new THREE.PlaneGeometry(width, height);
+        const cloudMaterial = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.6,
+            depthWrite: false,
+            side: THREE.DoubleSide // Додаємо двосторонній матеріал
+        });        
+        
+        const cloud = new THREE.Mesh(cloudGeometry, cloudMaterial);
+        cloud.position.set(
+            Math.cos(angle) * distance,
+            altitude,
+            Math.sin(angle) * distance
+        );
+        cloud.rotation.x = -Math.PI / 2;
+
+        cloudGroup.add(cloud);
+    }
+
+    scene.add(cloudGroup);
+}
+
+
+
+// Викликаємо функцію для створення хмар
+createClouds();
 
 const controls = new FlyControls(camera, renderer.domElement);
 controls.movementSpeed = 20;

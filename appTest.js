@@ -3,6 +3,7 @@ import { EffectComposer } from './postprocessing/EffectComposer.js';
 import { RenderPass } from './postprocessing/RenderPass.js';
 import { SAOPass } from './postprocessing/SAOPass.js';
 import { OutputPass } from './postprocessing/OutputPass.js';
+import { FontLoader } from 'https://threejs.org/examples/js/loaders/FontLoader.js';
 
 // Створити сцену, камеру і рендерер
 const scene = new THREE.Scene();

@@ -19,8 +19,8 @@ export function generateLandscape(chunkX, chunkZ) {
         for (let z = 0; z < depth; z++) {
             landscape[x][z] = [];
             
-            const dirtheight = generateHeight(chunkX + x, chunkZ + z);
-            const stoneheight = dirtheight / 3;
+            const dirtheight = generateHeight(chunkX + x, chunkZ + z) / 4 + 8;
+            const stoneheight = generateHeight(chunkX + x, chunkZ + z) / 8 + 2;            
 
             for (let y = 0; y < maxHeight; y++) {
                 let block;
