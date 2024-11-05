@@ -39,60 +39,59 @@ function generateChunk(chunkX, chunkZ) {
     const landscape = generateLandscape(chunkX, chunkZ);
     const blocks = new Set();
 
+    // Collect block positions
     for (let x = 0; x < landscape.length; x++) {
         for (let z = 0; z < landscape[x].length; z++) {
             for (let y = 0; y < landscape[x][z].length; y++) {
                 const blockData = landscape[x][z][y];
-                const block = blockData.block;
-
-                if (block === 'air') continue;
-
-                blocks.add(`${chunkX + x},${y},${chunkZ + z}`);
-            }
-        }
-    }
-
-    for (let x = 0; x < landscape.length; x++) {
-        for (let z = 0; z < landscape[x].length; z++) {
-            for (let y = 0; y < landscape[x][z].length; y++) {
-                const blockData = landscape[x][z][y];
-                const block = blockData.block;
-
-                if (block === 'air') continue;
-
-                const position = `${chunkX + x},${y},${chunkZ + z}`;
-                const shouldRender = 
-                    !blocks.has(`${chunkX + x - 1},${y},${chunkZ + z}`) ||
-                    !blocks.has(`${chunkX + x + 1},${y},${chunkZ + z}`) ||
-                    !blocks.has(`${chunkX + x},${y - 1},${chunkZ + z}`) ||
-                    !blocks.has(`${chunkX + x},${y + 1},${chunkZ + z}`) ||
-                    !blocks.has(`${chunkX + x},${y},${chunkZ + z - 1}`) ||
-                    !blocks.has(`${chunkX + x},${y},${chunkZ + z + 1}`);
-
-                if (shouldRender) {
-                    const geometry = new THREE.BoxGeometry(cubeSize, cubeSize, cubeSize);
-                    const texture = getBlockTexture(block);
-
-                    // Create the material with shadow properties
-                    const material = new THREE.MeshStandardMaterial({ map: texture }); // Use MeshStandardMaterial for shadows
-                    material.needsUpdate = true;
-
-                    const cube = new THREE.Mesh(geometry, material);
-                    cube.position.set((chunkX + x) * cubeSize, y * cubeSize, (chunkZ + z) * cubeSize);
-                    cube.castShadow = false; // Disable cube from casting shadows
-                    cube.receiveShadow = false; // Disable cube from receiving shadows
-                    scene.add(cube);
-
-                    const edges = new THREE.EdgesGeometry(geometry);
-                    const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
-                    const lineSegments = new THREE.LineSegments(edges, lineMaterial);
-                    lineSegments.position.copy(cube.position);
-                    scene.add(lineSegments);
+                if (blockData.block !== 'air') {
+                    blocks.add(`${chunkX + x},${y},${chunkZ + z}`);
                 }
             }
         }
     }
+
+    // Render quads for each side
+    for (let x = 0; x < landscape.length; x++) {
+        for (let z = 0; z < landscape[x].length; z++) {
+            for (let y = 0; y < landscape[x][z].length; y++) {
+                const blockData = landscape[x][z][y];
+                const block = blockData.block;
+
+                if (block === 'air') continue;
+
+                const posX = chunkX + x;
+                const posY = y;
+                const posZ = chunkZ + z;
+                const texture = getBlockTexture(block);
+                const material = new THREE.MeshStandardMaterial({ map: texture, side: THREE.DoubleSide });
+
+                // Check each side for a neighboring block
+                const directions = [
+                    { offset: [-1, 0, 0], position: [posX - 1, posY, posZ], rotation: [0, Math.PI / 2, 0] }, // Left
+                    { offset: [1, 0, 0], position: [posX + 1, posY, posZ], rotation: [0, -Math.PI / 2, 0] },  // Right
+                    { offset: [0, -1, 0], position: [posX, posY - 1, posZ], rotation: [Math.PI / 2, 0, 0] },  // Bottom
+                    { offset: [0, 1, 0], position: [posX, posY + 1, posZ], rotation: [-Math.PI / 2, 0, 0] }, // Top
+                    { offset: [0, 0, -1], position: [posX, posY, posZ - 1], rotation: [0, 0, 0] },            // Front
+                    { offset: [0, 0, 1], position: [posX, posY, posZ + 1], rotation: [0, Math.PI, 0] }       // Back
+                ];
+
+                // Render a quad for each visible side
+                directions.forEach(({ offset, position, rotation }) => {
+                    const neighborKey = `${position[0]},${position[1]},${position[2]}`;
+                    if (!blocks.has(neighborKey)) {
+                        const quadGeometry = new THREE.PlaneGeometry(cubeSize, cubeSize);
+                        const quad = new THREE.Mesh(quadGeometry, material);
+                        quad.position.set(posX * cubeSize + offset[0] * cubeSize / 2, posY * cubeSize + offset[1] * cubeSize / 2, posZ * cubeSize + offset[2] * cubeSize / 2);
+                        quad.rotation.set(rotation[0], rotation[1], rotation[2]);
+                        scene.add(quad);
+                    }
+                });
+            }
+        }
+    }
 }
+
 
 function getBlockTexture(block) {
     let texturePath;
@@ -119,7 +118,7 @@ function generateSingleChunk(chunkX, chunkZ) {
 generateSingleChunk(0, 0);
 
 const controls = new FlyControls(camera, renderer.domElement);
-controls.movementSpeed = 100;
+controls.movementSpeed = 20;
 controls.rollSpeed = 1.3;
 controls.autoForward = false;
 controls.dragToLook = true;
@@ -128,7 +127,7 @@ const fpsCounter = document.createElement('div');
 fpsCounter.style.position = 'absolute';
 fpsCounter.style.top = '10px';
 fpsCounter.style.left = '10px';
-fpsCounter.style.color = '#ffffff';
+fpsCounter.style.color = '#000000';
 fpsCounter.style.fontSize = '16px';
 document.body.appendChild(fpsCounter);
 
@@ -141,7 +140,7 @@ const renderPass = new RenderPass(scene, camera);
 composer.addPass(renderPass);
 
 // Додати SAOPass з вашими параметрами
-const saoPass = new SAOPass(scene, camera, false, true);
+const saoPass = new SAOPass(scene, camera);
 composer.addPass(saoPass);
 
 saoPass.params.saoBias = 10;
@@ -153,6 +152,7 @@ saoPass.params.saoBlur = true;
 saoPass.params.saoBlurRadius = 20;
 saoPass.params.saoBlurStdDev = 13;
 saoPass.params.saoBlurDepthCutoff = 0.001;
+saoPass.normalMaterial.side = THREE.DoubleSide;
 saoPass.enabled = true;
 
 // Додати OutputPass для виводу результату
@@ -171,6 +171,11 @@ function updateComposerSize() {
 // Додати обробник подій для зміни розміру вікна
 window.addEventListener('resize', updateComposerSize);
 
+function adjustSAOScale() {
+    const distance = camera.position.length(); // Distance from origin or target point
+    saoPass.params.saoScale = 128 * 2.5 / distance; // Scale down with distance
+}
+
 // Анімаційний цикл
 function animate() {
     const currentTime = performance.now();
@@ -186,6 +191,7 @@ function animate() {
 
     requestAnimationFrame(animate);
     controls.update(0.01);
+    // adjustSAOScale(); // Adjust SAO scale based on distance
     composer.render(); // Використовуємо composer для рендерингу з SAO
 }
 
