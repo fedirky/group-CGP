@@ -73,6 +73,7 @@ function getInstancedMeshes(block) {
     return meshes[block];
 }
 
+
 function renderChunk(chunkX, chunkZ) {
     const cubeSize = 1;
     const landscape = generateLandscape(chunkX, chunkZ);
@@ -137,6 +138,7 @@ function renderChunk(chunkX, chunkZ) {
         }
     }
 
+    // Ensure all instance matrices are updated for rendering
     Object.values(meshes).forEach(instancedMeshes => {
         instancedMeshes.forEach(mesh => {
             mesh.instanceMatrix.needsUpdate = true;
@@ -156,8 +158,8 @@ let lastTime = performance.now();
 
 // Generate 4 chunks in a 2x2 grid
 const chunkSize = 16; // Size of each chunk (optional, if you have a specific size)
-const numChunksX = 2; // Number of chunks in the X direction
-const numChunksZ = 1; // Number of chunks in the Z direction
+const numChunksX = 3; // Number of chunks in the X direction
+const numChunksZ = 3; // Number of chunks in the Z direction
 
 for (let i = 0; i < numChunksX; i++) {
     for (let j = 0; j < numChunksZ; j++) {
@@ -209,7 +211,7 @@ saoPass.params.saoBlurRadius = 20;
 saoPass.params.saoBlurStdDev = 13;
 saoPass.params.saoBlurDepthCutoff = 0.001;
 saoPass.normalMaterial.side = THREE.DoubleSide;
-saoPass.enabled = true;
+saoPass.enabled = false;
 
 // Add OutputPass for output result
 const outputPass = new OutputPass();
