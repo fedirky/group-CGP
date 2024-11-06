@@ -37,40 +37,103 @@ scene.add(ambientLight);
 function createClouds() {
     const cloudGroup = new THREE.Group();
     const cloudCount = 50;
-    const minWidth = 10, maxWidth = 40;
-    const minHeight = 2, maxHeight = 5;
+    const cubeSize = 1;
+    const maxInstancesPerMesh = 512;
+    const minWidth = 8, maxWidth = 16;
+    const minLength = 16, maxLength = 32;
     const minAltitude = 30, maxAltitude = 80;
     const spreadDistance = 500;
+    const tempMatrix = new THREE.Matrix4();
 
+    // Define directions and rotations for each face of the cube
+    const directions = [
+        { offset: [-1, 0, 0], rotation: [0, Math.PI / 2, 0] },   // Left
+        { offset: [1, 0, 0], rotation: [0, -Math.PI / 2, 0] },   // Right
+        { offset: [0, -1, 0], rotation: [Math.PI / 2, 0, 0] },   // Bottom
+        { offset: [0, 1, 0], rotation: [-Math.PI / 2, 0, 0] },   // Top
+        { offset: [0, 0, -1], rotation: [0, 0, 0] },             // Front
+        { offset: [0, 0, 1], rotation: [0, Math.PI, 0] }         // Back
+    ];
+
+    // Loop through to create cloud clusters
     for (let i = 0; i < cloudCount; i++) {
-        const width = THREE.MathUtils.lerp(minWidth, maxWidth, Math.random());
-        const height = THREE.MathUtils.lerp(minHeight, maxHeight, Math.random());
+        const cloudWidth = THREE.MathUtils.randInt(minWidth, maxWidth);
+        const cloudLength = THREE.MathUtils.randInt(minLength, maxLength);
         const altitude = THREE.MathUtils.lerp(minAltitude, maxAltitude, Math.random());
         const distance = THREE.MathUtils.randFloat(0, spreadDistance);
         const angle = Math.random() * Math.PI * 2;
 
-        const cloudGeometry = new THREE.PlaneGeometry(width, height);
-        const cloudMaterial = new THREE.MeshBasicMaterial({
-            color: 0xffffff,
-            transparent: true,
-            opacity: 0.6,
-            depthWrite: false,
-            side: THREE.DoubleSide // Додаємо двосторонній матеріал
-        });        
-        
-        const cloud = new THREE.Mesh(cloudGeometry, cloudMaterial);
-        cloud.position.set(
-            Math.cos(angle) * distance,
-            altitude,
-            Math.sin(angle) * distance
+        // Create a 3D array to mark blocks as undefined based on 0.2 probability
+        const cloudShape = Array.from({ length: cloudWidth }, () => 
+            Array.from({ length: cloudLength }, () => 
+                Array.from({ length: 2 }, () => Math.random() > 0.2) // True if the block exists, false if "undefined"
+            )
         );
-        cloud.rotation.x = -Math.PI / 2;
 
-        cloudGroup.add(cloud);
+        // Create instanced meshes for this cloud cluster
+        const instancedMeshes = [];
+        let instancedMesh;
+
+        for (let x = 0; x < cloudWidth; x++) {
+            for (let z = 0; z < cloudLength; z++) {
+                for (let y = 0; y < 3; y++) { // Height of 2 for volumetric effect
+                    if (!cloudShape[x][z][y]) continue; // Skip rendering undefined blocks
+
+                    const posX = x - cloudWidth / 2;
+                    const posY = y;
+                    const posZ = z - cloudLength / 2;
+
+                    // Check for instanced mesh capacity
+                    if (!instancedMesh || instancedMesh.count >= maxInstancesPerMesh) {
+                        const geometry = new THREE.PlaneGeometry(cubeSize, cubeSize);
+                        const material = new THREE.MeshBasicMaterial({
+                            color: 0xffffff,
+                            transparent: true,
+                            opacity: 0.7,
+                            depthWrite: false,
+                            side: THREE.DoubleSide
+                        });
+                        instancedMesh = new THREE.InstancedMesh(geometry, material, maxInstancesPerMesh);
+                        instancedMesh.count = 0;
+                        instancedMeshes.push(instancedMesh);
+                        cloudGroup.add(instancedMesh);
+                    }
+
+                    // Add faces for visible sides only
+                    directions.forEach(({ offset, rotation }) => {
+                        const [nx, ny, nz] = [x + offset[0], y + offset[1], z + offset[2]];
+                        const isEdgeBlock = 
+                            nx < 0 || nx >= cloudWidth || 
+                            nz < 0 || nz >= cloudLength || 
+                            ny < 0 || ny >= 2 || !cloudShape[nx]?.[nz]?.[ny]; // Add faces if adjacent block is undefined or out of bounds
+
+                        if (isEdgeBlock) {
+                            tempMatrix.compose(
+                                new THREE.Vector3(
+                                    posX * cubeSize + offset[0] * cubeSize / 2 + Math.cos(angle) * distance,
+                                    posY * cubeSize + offset[1] * cubeSize / 2 + altitude,
+                                    posZ * cubeSize + offset[2] * cubeSize / 2 + Math.sin(angle) * distance
+                                ),
+                                new THREE.Quaternion().setFromEuler(new THREE.Euler(...rotation)),
+                                new THREE.Vector3(1, 1, 1)
+                            );
+                            instancedMesh.setMatrixAt(instancedMesh.count++, tempMatrix);
+                        }
+                    });
+                }
+            }
+        }
+
+        // Ensure all instance matrices are updated for rendering
+        instancedMeshes.forEach(mesh => {
+            mesh.instanceMatrix.needsUpdate = true;
+        });
     }
 
     scene.add(cloudGroup);
 }
+
+
 
 createClouds()
 
