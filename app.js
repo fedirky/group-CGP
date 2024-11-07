@@ -5,12 +5,14 @@ import { EffectComposer } from './postprocessing/EffectComposer.js';
 import { RenderPass } from './postprocessing/RenderPass.js';
 import { SAOPass } from './postprocessing/SAOPass.js';
 import { OutputPass } from './postprocessing/OutputPass.js';
+import { ShaderPass } from './postprocessing/ShaderPass.js';
+import { FXAAShader } from './shaders/FXAAShader.js';
 
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB);
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer({ alpha: true }); // Allow transparent background
+const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false }); // Allow transparent background
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true; // Enable shadow maps
 document.body.appendChild(renderer.domElement);
@@ -343,7 +345,11 @@ saoPass.params.saoBlurRadius = 20;
 saoPass.params.saoBlurStdDev = 13;
 saoPass.params.saoBlurDepthCutoff = 0.001;
 saoPass.normalMaterial.side = THREE.DoubleSide;
-saoPass.enabled = true;
+saoPass.enabled = false;
+
+const fxaaPass = new ShaderPass(FXAAShader);
+fxaaPass.material.uniforms['resolution'].value.set(1 / window.innerWidth, 1 / window.innerHeight);
+composer.addPass(fxaaPass);
 
 // Add OutputPass for output result
 const outputPass = new OutputPass();
@@ -356,6 +362,8 @@ function updateComposerSize() {
     
     renderer.setSize(width, height); // Set renderer size
     composer.setSize(width, height); // Set composer size
+
+    fxaaPass.material.uniforms['resolution'].value.set(1 / width, 1 / height);
 }
 
 // Add event handler for window resize
