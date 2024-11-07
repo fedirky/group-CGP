@@ -144,33 +144,57 @@ const meshes = {}; // Store arrays of InstancedMeshes by block type
 
 
 function getBlockTexture(block) {
-    let texturePath;
+    let texturePath, bumpPath;
     switch (block) {
-        case 'water': texturePath = './textures/water.png'; break;
-        case 'sand': texturePath = './textures/sand.png'; break;
-        case 'dirt': texturePath = './textures/dirt.png'; break;
-        case 'stone': texturePath = './textures/stone.png'; break;
-        default: texturePath = './textures/default.png'; break;
+        case 'water': 
+            texturePath = './textures/water.png'; 
+            bumpPath = './textures/water_bump.png';
+            break;
+        case 'sand': 
+            texturePath = './textures/sand.png'; 
+            bumpPath = './textures/sand_bump.png';
+            break;
+        case 'dirt': 
+            texturePath = './textures/dirt.png'; 
+            bumpPath = './textures/dirt_bump.png';
+            break;
+        case 'stone': 
+            texturePath = './textures/stone.png'; 
+            bumpPath = './textures/stone_bump.png';
+            break;
+        default: 
+            texturePath = './textures/default.png'; 
+            bumpPath = './textures/default_bump.png';
+            break;
     }
 
+    // Load the color texture
     const texture = textureLoader.load(texturePath);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.minFilter = THREE.NearestFilter;
     texture.magFilter = THREE.NearestFilter;
-    return texture;
-}
 
+    // Load the bump map
+    const bumpMap = textureLoader.load(bumpPath);
+    bumpMap.minFilter = THREE.NearestFilter;
+    bumpMap.magFilter = THREE.NearestFilter;
+
+    return { map: texture, bumpMap: bumpMap };
+}
 
 function getBlockMaterial(block) {
     if (!materials[block]) {
-        const texture = getBlockTexture(block);
+        const { map, bumpMap } = getBlockTexture(block);
         materials[block] = new THREE.MeshStandardMaterial({
-            map: texture,
+            map: map,
+            bumpMap: bumpMap,
+            bumpScale: 2.5,  // Adjust bump intensity as needed
             side: THREE.DoubleSide
         });
     }
     return materials[block];
 }
+
 
 // Helper to get or create an InstancedMesh array for a given block type
 function getInstancedMeshes(block) {
@@ -266,8 +290,8 @@ let lastTime = performance.now();
 
 // Generate 4 chunks in a 2x2 grid
 const chunkSize = 16; // Size of each chunk (optional, if you have a specific size)
-const numChunksX = 3; // Number of chunks in the X direction
-const numChunksZ = 3; // Number of chunks in the Z direction
+const numChunksX = 8; // Number of chunks in the X direction
+const numChunksZ = 8; // Number of chunks in the Z direction
 
 for (let i = 0; i < numChunksX; i++) {
     for (let j = 0; j < numChunksZ; j++) {
