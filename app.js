@@ -12,7 +12,7 @@ import { FXAAShader } from './shaders/FXAAShader.js';
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB);
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false }); // Allow transparent background
+const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false}); // Allow transparent background
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true; // Enable shadow maps
 document.body.appendChild(renderer.domElement);
@@ -21,8 +21,8 @@ document.body.appendChild(renderer.domElement);
 camera.position.set(20, 15, 30);
 
 // Add a directional light
-const directionalLight = new THREE.DirectionalLight(0xffffcc, 9); // White light
-directionalLight.position.set(10, 20, 10); // Position the light
+const directionalLight = new THREE.DirectionalLight(0xffffcc, 10); // White light
+directionalLight.position.set(20, 20, 10); // Position the light
 directionalLight.castShadow = true; // Enable shadow casting
 scene.add(directionalLight);
 
@@ -170,16 +170,18 @@ function getBlockTexture(block) {
             break;
     }
 
-    // Load the color texture
+    // Load the color texture with pixelated effect but mipmaps
     const texture = textureLoader.load(texturePath);
     texture.colorSpace = THREE.SRGBColorSpace;
-    texture.minFilter = THREE.NearestFilter;
-    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.NearestMipmapNearestFilter;  // Nearest filtering for minification with mipmaps
+    texture.magFilter = THREE.NearestFilter;  // Nearest filtering for magnification (pixelated effect)
+    texture.generateMipmaps = true;  // Ensure mipmaps are generated
 
-    // Load the bump map
+    // Load the bump map with pixelated effect but mipmaps
     const bumpMap = textureLoader.load(bumpPath);
-    bumpMap.minFilter = THREE.NearestFilter;
-    bumpMap.magFilter = THREE.NearestFilter;
+    bumpMap.minFilter = THREE.NearestMipmapNearestFilter;  // Nearest filtering for minification with mipmaps
+    bumpMap.magFilter = THREE.NearestFilter;  // Nearest filtering for magnification (pixelated effect)
+    bumpMap.generateMipmaps = true;  // Ensure mipmaps are generated
 
     return { map: texture, bumpMap: bumpMap };
 }
@@ -187,15 +189,16 @@ function getBlockTexture(block) {
 function getBlockMaterial(block) {
     if (!materials[block]) {
         const { map, bumpMap } = getBlockTexture(block);
-        materials[block] = new THREE.MeshStandardMaterial({
+        materials[block] = new THREE.MeshLambertMaterial({
             map: map,
             bumpMap: bumpMap,
-            bumpScale: 2.5,  // Adjust bump intensity as needed
+            bumpScale: 0.7,  // Adjust bump intensity as needed
             side: THREE.DoubleSide
         });
     }
     return materials[block];
 }
+
 
 
 // Helper to get or create an InstancedMesh array for a given block type
@@ -292,8 +295,8 @@ let lastTime = performance.now();
 
 // Generate 4 chunks in a 2x2 grid
 const chunkSize = 16; // Size of each chunk (optional, if you have a specific size)
-const numChunksX = 8; // Number of chunks in the X direction
-const numChunksZ = 8; // Number of chunks in the Z direction
+const numChunksX = 4; // Number of chunks in the X direction
+const numChunksZ = 4; // Number of chunks in the Z direction
 
 for (let i = 0; i < numChunksX; i++) {
     for (let j = 0; j < numChunksZ; j++) {
@@ -345,7 +348,7 @@ saoPass.params.saoBlurRadius = 20;
 saoPass.params.saoBlurStdDev = 13;
 saoPass.params.saoBlurDepthCutoff = 0.001;
 saoPass.normalMaterial.side = THREE.DoubleSide;
-saoPass.enabled = false;
+saoPass.enabled = true;
 
 const fxaaPass = new ShaderPass(FXAAShader);
 fxaaPass.material.uniforms['resolution'].value.set(1 / window.innerWidth, 1 / window.innerHeight);
