@@ -16,7 +16,7 @@ renderer.shadowMap.enabled = true; // Enable shadow maps
 document.body.appendChild(renderer.domElement);
 
 // Camera setup
-camera.position.set(10, 10, 20);
+camera.position.set(20, 15, 30);
 
 // Add a directional light
 const directionalLight = new THREE.DirectionalLight(0xffffcc, 9); // White light
@@ -34,8 +34,10 @@ directionalLight.shadow.camera.far = 50; // Default
 const ambientLight = new THREE.AmbientLight(0x404040, 3.5); // Soft white light
 scene.add(ambientLight);
 
+
 function createClouds() {
     const cloudGroup = new THREE.Group();
+    cloudGroup.layers.set(1);
     const cloudCount = 50;
     const cubeSize = 1;
     const maxInstancesPerMesh = 512;
@@ -84,7 +86,7 @@ function createClouds() {
                     const posZ = z - cloudLength / 2;
 
                     // Check for instanced mesh capacity
-                    if (!instancedMesh || instancedMesh.count >= maxInstancesPerMesh) {
+                    if (!instancedMesh || instancedMesh.count >= maxInstancesPerMesh -6) {
                         const geometry = new THREE.PlaneGeometry(cubeSize, cubeSize);
                         const material = new THREE.MeshBasicMaterial({
                             color: 0xffffff,
@@ -134,12 +136,12 @@ function createClouds() {
 }
 
 
-
 createClouds()
 
 const textureLoader = new THREE.TextureLoader();
 const materials = {};
 const meshes = {}; // Store arrays of InstancedMeshes by block type
+
 
 function getBlockTexture(block) {
     let texturePath;
@@ -157,6 +159,7 @@ function getBlockTexture(block) {
     texture.magFilter = THREE.NearestFilter;
     return texture;
 }
+
 
 function getBlockMaterial(block) {
     if (!materials[block]) {
@@ -194,12 +197,11 @@ function renderChunk(chunkX, chunkZ) {
         { offset: [0, 0, 1], rotation: [0, Math.PI, 0] }         // Back
     ];
 
-    for (let x = 0; x < landscape.length; x++) {
-        for (let z = 0; z < landscape[x].length; z++) {
-            for (let y = 0; y < landscape[x][z].length; y++) {
-                const blockData = landscape[x][z][y];
+    landscape.forEach((column, x) => {
+        column.forEach((row, z) => {
+            row.forEach((blockData, y) => {
                 const block = blockData.block;
-                if (block === 'air') continue;
+                if (!block || block === 'air') return;
 
                 const posX = chunkX + x;
                 const posY = y;
@@ -208,15 +210,18 @@ function renderChunk(chunkX, chunkZ) {
                 const instancedMeshes = getInstancedMeshes(block);
                 let instancedMesh = instancedMeshes[instancedMeshes.length - 1];
 
-                if (!instancedMesh || instancedMesh.count >= maxInstancesPerMesh) {
+                // Check if there are fewer than 6 available spots in the current mesh
+                if (!instancedMesh || instancedMesh.count >= maxInstancesPerMesh - 6) {
+                    // Create a new instanced mesh if there are not enough spots
                     const geometry = new THREE.PlaneGeometry(cubeSize, cubeSize);
                     const material = getBlockMaterial(block);
                     instancedMesh = new THREE.InstancedMesh(geometry, material, maxInstancesPerMesh);
-                    instancedMesh.count = 0; // Track instance count per mesh
+                    instancedMesh.count = 0; // Reset count for the new mesh
                     instancedMeshes.push(instancedMesh);
                     scene.add(instancedMesh);
                 }
 
+                // Add the new block to the mesh
                 directions.forEach(({ offset, rotation }) => {
                     const [nx, ny, nz] = [x + offset[0], y + offset[1], z + offset[2]];
 
@@ -238,9 +243,9 @@ function renderChunk(chunkX, chunkZ) {
                         instancedMesh.setMatrixAt(instancedMesh.count++, tempMatrix);
                     }
                 });
-            }
-        }
-    }
+            });
+        });
+    });
 
     // Ensure all instance matrices are updated for rendering
     Object.values(meshes).forEach(instancedMeshes => {
@@ -252,7 +257,6 @@ function renderChunk(chunkX, chunkZ) {
 
 
 function renderSingleChunk(chunkX, chunkZ) {
-    const chunkSize = 16;
     renderChunk(chunkX, chunkZ);
 }
 
