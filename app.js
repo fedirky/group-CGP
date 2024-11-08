@@ -196,7 +196,7 @@ function getBlockMaterial(block) {
         materials[block] = new THREE.MeshLambertMaterial({
             map: map,
             bumpMap: bumpMap,
-            bumpScale: 1.0,  // Adjust bump intensity as needed
+            bumpScale: 0.9,  // Adjust bump intensity as needed
             side: THREE.DoubleSide
         });
     }
@@ -309,7 +309,7 @@ for (let i = 0; i < numChunksX; i++) {
 
 const controls = new FlyControls(camera, renderer.domElement);
 controls.movementSpeed = 20;
-controls.rollSpeed = 1.3;
+controls.rollSpeed = 0.7;
 controls.autoForward = false;
 controls.dragToLook = true;
 

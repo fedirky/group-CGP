@@ -1,7 +1,8 @@
 import {
 	Controls,
 	Quaternion,
-	Vector3
+	Vector3,
+	Euler
 } from './three.r168.module.js';
 
 const _changeEvent = { type: 'change' };
@@ -82,34 +83,47 @@ class FlyControls extends Controls {
 
 	}
 
-	update( delta ) {
-
-		if ( this.enabled === false ) return;
-
+	update(delta) {
+		if (this.enabled === false) return;
+	
 		const object = this.object;
-
+	
 		const moveMult = delta * this.movementSpeed;
 		const rotMult = delta * this.rollSpeed;
-
-		object.translateX( this._moveVector.x * moveMult );
-		object.translateY( this._moveVector.y * moveMult );
-		object.translateZ( this._moveVector.z * moveMult );
-
-		_tmpQuaternion.set( this._rotationVector.x * rotMult, this._rotationVector.y * rotMult, this._rotationVector.z * rotMult, 1 ).normalize();
-		object.quaternion.multiply( _tmpQuaternion );
-
+	
+		object.translateX(this._moveVector.x * moveMult);
+		object.translateY(this._moveVector.y * moveMult);
+		object.translateZ(this._moveVector.z * moveMult);
+	
+		_tmpQuaternion.set(this._rotationVector.x * rotMult, this._rotationVector.y * rotMult, this._rotationVector.z * rotMult, 1).normalize();
+	
+		// Оновлюємо кватерніон камери
+		object.quaternion.multiply(_tmpQuaternion);
+	
+		// Створюємо ейлера з поточного кватерніону
+		const euler = new Euler().setFromQuaternion(object.quaternion, 'YXZ');
+	
+		// Обмежуємо pitch (вертикальний кут) для того, щоб камера не переверталася
+		euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x)); // Обмеження по осі X (pitch)
+	
+		// Обнуляємо roll (обертання навколо осі Z), щоб уникнути перевертання
+		euler.z = 0;
+	
+		// Перетворюємо ейлера назад в кватерніон і застосовуємо до камери
+		object.quaternion.setFromEuler(euler);
+	
 		if (
-			this._lastPosition.distanceToSquared( object.position ) > _EPS ||
-			8 * ( 1 - this._lastQuaternion.dot( object.quaternion ) ) > _EPS
+			this._lastPosition.distanceToSquared(object.position) > _EPS ||
+			8 * (1 - this._lastQuaternion.dot(object.quaternion)) > _EPS
 		) {
-
-			this.dispatchEvent( _changeEvent );
-			this._lastQuaternion.copy( object.quaternion );
-			this._lastPosition.copy( object.position );
-
+			this.dispatchEvent(_changeEvent);
+			this._lastQuaternion.copy(object.quaternion);
+			this._lastPosition.copy(object.position);
 		}
-
 	}
+	
+	
+	
 
 	// private
 
@@ -127,7 +141,7 @@ class FlyControls extends Controls {
 
 	_updateRotationVector() {
 
-		this._rotationVector.x = 0; //( - this._moveState.pitchDown + this._moveState.pitchUp );
+		this._rotationVector.x = ( - this._moveState.pitchDown + this._moveState.pitchUp );
 		this._rotationVector.y = ( - this._moveState.yawRight + this._moveState.yawLeft );
 		this._rotationVector.z = ( - this._moveState.rollRight + this._moveState.rollLeft );
 
@@ -253,22 +267,24 @@ function onPointerDown( event ) {
 }
 
 function onPointerMove( event ) {
+    if (this.enabled === false) return;
 
-	if ( this.enabled === false ) return;
+    if (!this.dragToLook || this._status > 0) {
+        const container = this._getContainerDimensions();
+        const halfWidth = container.size[0] / 2;
+        const halfHeight = container.size[1] / 2;
 
-	if ( ! this.dragToLook || this._status > 0 ) {
+        // Горизонтальний кут (yaw) змінюється
+        const yaw = -((event.pageX - container.offset[0]) - halfWidth) / halfWidth;
+        // Вертикальний кут (pitch) змінюється, але обмежується діапазоном
+        const pitch = ((event.pageY - container.offset[1]) - halfHeight) / halfHeight;
 
-		const container = this._getContainerDimensions();
-		const halfWidth = container.size[ 0 ] / 2;
-		const halfHeight = container.size[ 1 ] / 2;
+        // Обмежуємо pitch від -90 до 90 градусів
+        this._moveState.yawLeft = yaw;
+        this._moveState.pitchDown = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
 
-		this._moveState.yawLeft = - ( ( event.pageX - container.offset[ 0 ] ) - halfWidth ) / halfWidth;
-		this._moveState.pitchDown = ( ( event.pageY - container.offset[ 1 ] ) - halfHeight ) / halfHeight;
-
-		this._updateRotationVector();
-
-	}
-
+        this._updateRotationVector();
+    }
 }
 
 function onPointerUp( event ) {
