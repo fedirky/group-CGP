@@ -22,15 +22,15 @@ camera.position.set(20, 15, 30);
 
 // Add a directional light
 const directionalLight = new THREE.DirectionalLight(0xffffcc, 10); // White light
-directionalLight.position.set(20, 20, 10); // Position the light
+directionalLight.position.set(64, 64, 64); // Position the light
 directionalLight.castShadow = true; // Enable shadow casting
 scene.add(directionalLight);
 
 // Configure light shadows
-directionalLight.shadow.mapSize.width = 512; // Default
-directionalLight.shadow.mapSize.height = 512; // Default
+directionalLight.shadow.mapSize.width = 1024; // Default
+directionalLight.shadow.mapSize.height = 1024; // Default
 directionalLight.shadow.camera.near = 0.5; // Default
-directionalLight.shadow.camera.far = 50; // Default
+directionalLight.shadow.camera.far = 64; // Default
 
 // Add ambient light
 const ambientLight = new THREE.AmbientLight(0x404040, 3.5); // Soft white light
@@ -42,7 +42,7 @@ function createClouds() {
     cloudGroup.layers.set(1);
     const cloudCount = 50;
     const cubeSize = 1;
-    const maxInstancesPerMesh = 512;
+    const maxInstancesPerMesh = 1024;
     const minWidth = 8, maxWidth = 16;
     const minLength = 16, maxLength = 32;
     const minAltitude = 30, maxAltitude = 80;
@@ -173,15 +173,19 @@ function getBlockTexture(block) {
     // Load the color texture with pixelated effect but mipmaps
     const texture = textureLoader.load(texturePath);
     texture.colorSpace = THREE.SRGBColorSpace;
-    texture.minFilter = THREE.NearestMipmapNearestFilter;  // Nearest filtering for minification with mipmaps
+    texture.minFilter = THREE.LinearMipmapNearestFilter;  // Nearest filtering for minification with mipmaps
     texture.magFilter = THREE.NearestFilter;  // Nearest filtering for magnification (pixelated effect)
     texture.generateMipmaps = true;  // Ensure mipmaps are generated
+    texture.anisotropy = 16;
+    texture.needsUpdate = true;
 
     // Load the bump map with pixelated effect but mipmaps
     const bumpMap = textureLoader.load(bumpPath);
-    bumpMap.minFilter = THREE.NearestMipmapNearestFilter;  // Nearest filtering for minification with mipmaps
+    bumpMap.minFilter = THREE.LinearMipmapNearestFilter;  // Nearest filtering for minification with mipmaps
     bumpMap.magFilter = THREE.NearestFilter;  // Nearest filtering for magnification (pixelated effect)
     bumpMap.generateMipmaps = true;  // Ensure mipmaps are generated
+    bumpMap.anisotropy = 16;
+    bumpMap.needsUpdate = true;
 
     return { map: texture, bumpMap: bumpMap };
 }
@@ -192,13 +196,12 @@ function getBlockMaterial(block) {
         materials[block] = new THREE.MeshLambertMaterial({
             map: map,
             bumpMap: bumpMap,
-            bumpScale: 0.7,  // Adjust bump intensity as needed
+            bumpScale: 1.0,  // Adjust bump intensity as needed
             side: THREE.DoubleSide
         });
     }
     return materials[block];
 }
-
 
 
 // Helper to get or create an InstancedMesh array for a given block type
@@ -213,7 +216,7 @@ function getInstancedMeshes(block) {
 function renderChunk(chunkX, chunkZ) {
     const cubeSize = 1;
     const landscape = generateLandscape(chunkX, chunkZ);
-    const maxInstancesPerMesh = 512;
+    const maxInstancesPerMesh = 1024;
     const tempMatrix = new THREE.Matrix4();
 
     // Define directions and rotations for each face of the cube

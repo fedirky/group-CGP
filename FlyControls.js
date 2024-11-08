@@ -127,11 +127,11 @@ class FlyControls extends Controls {
 
 	_updateRotationVector() {
 
-		this._rotationVector.x = ( - this._moveState.pitchDown + this._moveState.pitchUp );
+		this._rotationVector.x = 0; //( - this._moveState.pitchDown + this._moveState.pitchUp );
 		this._rotationVector.y = ( - this._moveState.yawRight + this._moveState.yawLeft );
 		this._rotationVector.z = ( - this._moveState.rollRight + this._moveState.rollLeft );
 
-		//console.log( 'rotate:', [ this._rotationVector.x, this._rotationVector.y, this._rotationVector.z ] );
+		// console.log( 'rotate:', [ this._rotationVector.x, this._rotationVector.y, this._rotationVector.z ] );
 
 	}
 
@@ -185,8 +185,8 @@ function onKeyDown( event ) {
 		case 'ArrowLeft': this._moveState.yawLeft = 1; break;
 		case 'ArrowRight': this._moveState.yawRight = 1; break;
 
-		case 'KeyQ': this._moveState.rollLeft = 1; break;
-		case 'KeyE': this._moveState.rollRight = 1; break;
+		// case 'KeyQ': this._moveState.rollLeft = 1; break;
+		// case 'KeyE': this._moveState.rollRight = 1; break;
 
 	}
 
@@ -219,8 +219,8 @@ function onKeyUp( event ) {
 		case 'ArrowLeft': this._moveState.yawLeft = 0; break;
 		case 'ArrowRight': this._moveState.yawRight = 0; break;
 
-		case 'KeyQ': this._moveState.rollLeft = 0; break;
-		case 'KeyE': this._moveState.rollRight = 0; break;
+		// case 'KeyQ': this._moveState.rollLeft = 0; break;
+		// case 'KeyE': this._moveState.rollRight = 0; break;
 
 	}
 
