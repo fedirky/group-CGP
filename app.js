@@ -341,15 +341,15 @@ composer.addPass(renderPass);
 const saoPass = new SAOPass(scene, camera);
 composer.addPass(saoPass);
 
-saoPass.params.saoBias = 10;
+saoPass.params.saoBias = 20;
 saoPass.params.saoIntensity = 0.023;
 saoPass.params.saoScale = 9.5;
 saoPass.params.saoKernelRadius = 100;
 saoPass.params.saoMinResolution = 0;
 saoPass.params.saoBlur = true;
-saoPass.params.saoBlurRadius = 20;
+saoPass.params.saoBlurRadius = 10;
 saoPass.params.saoBlurStdDev = 13;
-saoPass.params.saoBlurDepthCutoff = 0.001;
+saoPass.params.saoBlurDepthCutoff = 0.0001;
 saoPass.normalMaterial.side = THREE.DoubleSide;
 saoPass.enabled = true;
 
