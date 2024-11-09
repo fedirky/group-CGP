@@ -21,7 +21,7 @@ document.body.appendChild(renderer.domElement);
 camera.position.set(20, 15, 30);
 
 // Add a directional light
-const directionalLight = new THREE.DirectionalLight(0xffffcc, 10); // White light
+const directionalLight = new THREE.DirectionalLight(0xffffcc, 5); // White light
 directionalLight.position.set(64, 64, 64); // Position the light
 directionalLight.castShadow = true; // Enable shadow casting
 scene.add(directionalLight);
@@ -341,14 +341,14 @@ composer.addPass(renderPass);
 const saoPass = new SAOPass(scene, camera);
 composer.addPass(saoPass);
 
-saoPass.params.saoBias = 20;
-saoPass.params.saoIntensity = 0.023;
-saoPass.params.saoScale = 9.5;
+saoPass.params.saoBias = 10;
+saoPass.params.saoIntensity = 0.011;
+saoPass.params.saoScale = 7.5;
 saoPass.params.saoKernelRadius = 100;
 saoPass.params.saoMinResolution = 0;
 saoPass.params.saoBlur = true;
-saoPass.params.saoBlurRadius = 10;
-saoPass.params.saoBlurStdDev = 13;
+saoPass.params.saoBlurRadius = 5;
+saoPass.params.saoBlurStdDev = 10;
 saoPass.params.saoBlurDepthCutoff = 0.0001;
 saoPass.normalMaterial.side = THREE.DoubleSide;
 saoPass.enabled = true;
