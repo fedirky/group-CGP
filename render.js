@@ -61,7 +61,7 @@ function getBlockMaterial(block, isTopFace = false) {
         materials[textureKey] = new THREE.MeshLambertMaterial({
             map: map,
             bumpMap: bumpMap,
-            bumpScale: 0.9,
+            bumpScale: 1.2,
             side: THREE.DoubleSide
         });
     }

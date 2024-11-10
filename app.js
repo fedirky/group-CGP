@@ -88,16 +88,16 @@ const saoPass = new SAOPass(scene, camera);
 composer.addPass(saoPass);
 
 saoPass.params.saoBias = 10;
-saoPass.params.saoIntensity = 0.011;
+saoPass.params.saoIntensity = 0.015;
 saoPass.params.saoScale = 7.5;
-saoPass.params.saoKernelRadius = 100;
+saoPass.params.saoKernelRadius = 50;
 saoPass.params.saoMinResolution = 0;
 saoPass.params.saoBlur = true;
-saoPass.params.saoBlurRadius = 7;
-saoPass.params.saoBlurStdDev = 20;
-saoPass.params.saoBlurDepthCutoff = 0.0001;
+saoPass.params.saoBlurRadius = 8;
+saoPass.params.saoBlurStdDev = 12;
+saoPass.params.saoBlurDepthCutoff = 0.0005;
 saoPass.normalMaterial.side = THREE.DoubleSide;
-saoPass.enabled = false;
+saoPass.enabled = true;
 
 const fxaaPass = new ShaderPass(FXAAShader);
 fxaaPass.material.uniforms['resolution'].value.set(1 / window.innerWidth, 1 / window.innerHeight);
