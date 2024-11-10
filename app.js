@@ -10,6 +10,29 @@ import { FXAAShader } from './shaders/FXAAShader.js';
 
 import { renderSingleChunk, createClouds } from './render.js';
 
+// Define a global or module-scoped variable to store settings
+let app_settings = {};
+
+// Function to load settings
+function loadSettings() {
+    return fetch('./settings.json')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok' + response.statusText);
+            }
+            return response.json();
+        })
+        .then(settings => {
+            app_settings = settings;  // Save settings to the global variable
+            console.log("Settings loaded:", app_settings);
+        })
+        .catch(error => {
+            console.error('Error loading settings:', error);
+        });
+}
+
+loadSettings();
+
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB);
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -41,16 +64,19 @@ scene.add(ambientLight);
 let frameCount = 0;
 let lastTime = performance.now();
 
-// Generate 4 chunks in a 2x2 grid
-const chunkSize = 16; // Size of each chunk (optional, if you have a specific size)
-const numChunksX = 2; // Number of chunks in the X direction
-const numChunksZ = 2; // Number of chunks in the Z direction
+// Generate 4 chunks in a X on Z grid
+loadSettings().then(() => {
+    const chunkSize = 16; // Size of each chunk (optional, if you have a specific size)
+    const numChunksX = app_settings.generation.world_size; // Number of chunks in the X direction
+    const numChunksZ = app_settings.generation.world_size; // Number of chunks in the Z direction
 
-for (let i = 0; i < numChunksX; i++) {
-    for (let j = 0; j < numChunksZ; j++) {
-        renderSingleChunk(scene, i * chunkSize, j * chunkSize);
+    for (let i = 0; i < numChunksX; i++) {
+        for (let j = 0; j < numChunksZ; j++) {
+            renderSingleChunk(scene, i * chunkSize, j * chunkSize);
+        }
     }
-}
+});
+
 createClouds(scene);
 
 const controls = new FlyControls(camera, renderer.domElement);
@@ -84,24 +110,30 @@ const renderPass = new RenderPass(scene, camera);
 composer.addPass(renderPass);
 
 // Add SAOPass with your parameters
-const saoPass = new SAOPass(scene, camera);
-composer.addPass(saoPass);
+loadSettings().then(() => {
+    if (app_settings.graphics.ssao) {
+        const saoPass = new SAOPass(scene, camera);
+        composer.addPass(saoPass);
 
-saoPass.params.saoBias = 10;
-saoPass.params.saoIntensity = 0.015;
-saoPass.params.saoScale = 7.5;
-saoPass.params.saoKernelRadius = 50;
-saoPass.params.saoMinResolution = 0;
-saoPass.params.saoBlur = true;
-saoPass.params.saoBlurRadius = 8;
-saoPass.params.saoBlurStdDev = 12;
-saoPass.params.saoBlurDepthCutoff = 0.0005;
-saoPass.normalMaterial.side = THREE.DoubleSide;
-saoPass.enabled = true;
+        saoPass.params.saoBias = 10;
+        saoPass.params.saoIntensity = 0.015;
+        saoPass.params.saoScale = 7.5;
+        saoPass.params.saoKernelRadius = 50;
+        saoPass.params.saoMinResolution = 0;
+        saoPass.params.saoBlur = true;
+        saoPass.params.saoBlurRadius = 8;
+        saoPass.params.saoBlurStdDev = 12;
+        saoPass.params.saoBlurDepthCutoff = 0.0005;
+        saoPass.normalMaterial.side = THREE.DoubleSide;
+        saoPass.enabled = true;
+    }
 
-const fxaaPass = new ShaderPass(FXAAShader);
-fxaaPass.material.uniforms['resolution'].value.set(1 / window.innerWidth, 1 / window.innerHeight);
-composer.addPass(fxaaPass);
+    if (app_settings.graphics.fxaa) {
+        const fxaaPass = new ShaderPass(FXAAShader);
+        fxaaPass.material.uniforms['resolution'].value.set(1 / window.innerWidth, 1 / window.innerHeight);
+        composer.addPass(fxaaPass);
+    }
+});
 
 // Add OutputPass for output result
 const outputPass = new OutputPass();
