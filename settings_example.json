@@ -1,0 +1,9 @@
+{
+    "graphics": {
+        "ssao": true,
+        "fxaa": true
+    },
+    "generation": {
+        "world_size": 8
+    }
+}
