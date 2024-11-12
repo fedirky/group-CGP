@@ -10,12 +10,15 @@ const meshes = {}; // Store arrays of InstancedMeshes by block type
 function getBlockTexture(block, isTopFace = false) {
     let texturePath, bumpPath;
 
-    if (block === 'dirt') {
-        texturePath = isTopFace ? './textures/grass.png' : './textures/dirt.png';
-        bumpPath = isTopFace ? './textures/grass_bump.png' : './textures/dirt_bump.png';
+    if (block === 'grass') {
+        texturePath = isTopFace ? './textures/grass.png' : './textures/grass_side.png';
+        bumpPath = isTopFace ? './textures/grass_bump.png' : './textures/grass_bump.png';
     } else {
-        // Handle other block types as before
         switch (block) {
+            case 'dirt':
+                texturePath = './textures/dirt.png';
+                bumpPath = './textures/dirt_bump.png';
+                break;
             case 'water':
                 texturePath = './textures/water.png';
                 bumpPath = './textures/water_bump.png';
@@ -55,7 +58,7 @@ function getBlockTexture(block, isTopFace = false) {
 
 
 function getBlockMaterial(block, isTopFace = false) {
-    const textureKey = isTopFace ? `${block}_top` : block;
+    const textureKey = isTopFace && block === 'grass' ? 'grass_top' : block;
     if (!materials[textureKey]) {
         const { map, bumpMap } = getBlockTexture(block, isTopFace);
         materials[textureKey] = new THREE.MeshLambertMaterial({
@@ -84,7 +87,6 @@ function renderChunk(scene, chunkX, chunkZ) {
     const maxInstancesPerMesh = 1024;
     const tempMatrix = new THREE.Matrix4();
 
-    // Directions for each face, marking the top face
     const directions = [
         { offset: [-1, 0, 0], rotation: [0, Math.PI / 2, 0], isTopFace: false },   // Left
         { offset: [1, 0, 0], rotation: [0, -Math.PI / 2, 0], isTopFace: false },   // Right
@@ -114,9 +116,8 @@ function renderChunk(scene, chunkX, chunkZ) {
                         ny < 0 || ny >= landscape[0][0].length ||
                         landscape[nx]?.[nz]?.[ny]?.block === 'air'
                     ) {
-                        // Use a separate material for the top face of dirt blocks
-                        const materialKey = isTopFace && block === 'dirt' ? 'dirt_top' : block;
-                        const material = getBlockMaterial(block, isTopFace && block === 'dirt');
+                        const materialKey = isTopFace && block === 'grass' ? 'grass_top' : block;
+                        const material = getBlockMaterial(block, isTopFace && block === 'grass');
                         const instancedMeshes = getInstancedMeshesForMaterial(materialKey);
                         let instancedMesh = instancedMeshes[instancedMeshes.length - 1];
 
