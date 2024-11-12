@@ -1,5 +1,6 @@
 import * as THREE from './three.r168.module.js';
 import { generateLandscape } from './terrain.js';
+import { GLTFLoader } from './postprocessing/GLTFLoader.js';
 
 
 const textureLoader = new THREE.TextureLoader();
@@ -81,6 +82,17 @@ function getInstancedMeshesForMaterial(materialKey) {
 }
 
 
+function loadFlowerModel(scene, posX, posY, posZ, flowerIndex) {
+    const loader = new GLTFLoader();
+    loader.load(`./vox_models/flower-${flowerIndex}.glb`, function(gltf) {
+        const flowerModel = gltf.scene.clone();
+        flowerModel.position.set(posX, posY, posZ);
+        flowerModel.scale.set(0.6, 0.6, 0.6); // Масштабуйте квітку за потреби
+        scene.add(flowerModel);
+    });
+}
+
+
 function renderChunk(scene, chunkX, chunkZ) {
     const cubeSize = 1;
     const landscape = generateLandscape(chunkX, chunkZ);
@@ -106,16 +118,26 @@ function renderChunk(scene, chunkX, chunkZ) {
                 const posY = y;
                 const posZ = chunkZ + z;
 
+                // Перевірка на квітку
+                if (block.startsWith('flower-')) {
+                    const flowerIndex = block.split('-')[1];
+                    loadFlowerModel(scene, posX, posY - 0.5, posZ, flowerIndex); // Завантажуємо модель квітки
+                    return;
+                }
+
+                // Інакше обробляємо як звичайний блок
                 directions.forEach(({ offset, rotation, isTopFace }) => {
                     const [nx, ny, nz] = [x + offset[0], y + offset[1], z + offset[2]];
 
-                    // Check if the adjacent block is out of bounds or air
-                    if (
+                    // Перевіряємо, чи сусідній блок є порожнім або квіткою
+                    const isNeighborEmptyOrFlower = 
                         nx < 0 || nx >= landscape.length ||
                         nz < 0 || nz >= landscape[0].length ||
                         ny < 0 || ny >= landscape[0][0].length ||
-                        landscape[nx]?.[nz]?.[ny]?.block === 'air'
-                    ) {
+                        landscape[nx]?.[nz]?.[ny]?.block === 'air' ||
+                        (landscape[nx]?.[nz]?.[ny]?.block?.startsWith('flower-'));
+
+                    if (isNeighborEmptyOrFlower) {
                         const materialKey = isTopFace && block === 'grass' ? 'grass_top' : block;
                         const material = getBlockMaterial(block, isTopFace && block === 'grass');
                         const instancedMeshes = getInstancedMeshesForMaterial(materialKey);
@@ -145,7 +167,6 @@ function renderChunk(scene, chunkX, chunkZ) {
         });
     });
 
-    // Update instance matrices
     Object.values(meshes).forEach(instancedMeshes => {
         instancedMeshes.forEach(mesh => {
             mesh.instanceMatrix.needsUpdate = true;

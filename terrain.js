@@ -3,12 +3,10 @@ const simplex = new SimplexNoise();
 const scale = 0.1;
 const heightMultiplier = 16; // Максимальна висота змінена на 16
 
-
 export function generateHeight(chunkX, chunkZ) {
     const noiseValue = simplex.noise2D(chunkX * scale, chunkZ * scale);
     return Math.floor((noiseValue + 1) * heightMultiplier / 2);
 }
-
 
 export function generateLandscape(chunkX, chunkZ) {
     const width = 16;   // Width of the chunk
@@ -41,7 +39,7 @@ export function generateLandscape(chunkX, chunkZ) {
         }
     }
 
-    // Second loop: Set topmost dirt blocks to grass
+    // Second loop: Set topmost dirt blocks to grass and add random flowers
     for (let x = 0; x < width; x++) {
         for (let z = 0; z < depth; z++) {
             for (let y = maxHeight - 1; y >= 0; y--) {
@@ -49,6 +47,12 @@ export function generateLandscape(chunkX, chunkZ) {
                     // If no blocks are above, set to grass
                     if (y === maxHeight - 1 || landscape[x][z][y + 1].block === 'air') {
                         landscape[x][z][y].block = 'grass';
+
+                        // З вірогідністю 0.25% додаємо випадкову квітку над блоком "grass"
+                        if (Math.random() < 0.025) {
+                            const flowerType = `flower-${Math.floor(Math.random() * 7) + 1}`;
+                            landscape[x][z][y + 1] = { block: flowerType };
+                        }
                     }
                     break; // Stop after finding the first dirt block from the top
                 }
@@ -58,3 +62,4 @@ export function generateLandscape(chunkX, chunkZ) {
 
     return landscape;
 }
+
