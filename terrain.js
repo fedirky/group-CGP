@@ -50,7 +50,7 @@ export function generateLandscape(chunkX, chunkZ) {
 
                         // З вірогідністю 0.25% додаємо випадкову квітку над блоком "grass"
                         if (Math.random() < 0.025) {
-                            const flowerType = `flower-${Math.floor(Math.random() * 7) + 1}`;
+                            const flowerType = `flower_${Math.floor(Math.random() * 7) + 1}`;
                             landscape[x][z][y + 1] = { block: flowerType };
                         }
                     }

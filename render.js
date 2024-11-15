@@ -6,35 +6,37 @@ import { GLTFLoader } from './postprocessing/GLTFLoader.js';
 const textureLoader = new THREE.TextureLoader();
 const materials = {};
 const meshes = {}; // Store arrays of InstancedMeshes by block type
+const maxFlowerInstances = 1024;
+const flowerMeshes = {};
 
 
 function getBlockTexture(block, isTopFace = false) {
     let texturePath, bumpPath;
 
     if (block === 'grass') {
-        texturePath = isTopFace ? './textures/grass.png' : './textures/grass_side.png';
-        bumpPath = isTopFace ? './textures/grass_bump.png' : './textures/grass_bump.png';
+        texturePath = isTopFace ? './textures/blocks/grass.png' : './textures/blocks/grass_side.png';
+        bumpPath = './textures/blocks/grass_bump.png';
     } else {
         switch (block) {
             case 'dirt':
-                texturePath = './textures/dirt.png';
+                texturePath = './textures/blocks/dirt.png';
                 bumpPath = './textures/dirt_bump.png';
                 break;
             case 'water':
-                texturePath = './textures/water.png';
-                bumpPath = './textures/water_bump.png';
+                texturePath = './textures/blocks/water.png';
+                bumpPath = './textures/blocks/water_bump.png';
                 break;
             case 'sand':
-                texturePath = './textures/sand.png';
-                bumpPath = './textures/sand_bump.png';
+                texturePath = './textures/blocks/sand.png';
+                bumpPath = './textures/blocks/sand_bump.png';
                 break;
             case 'stone':
-                texturePath = './textures/stone.png';
-                bumpPath = './textures/stone_bump.png';
+                texturePath = './textures/blocks/stone.png';
+                bumpPath = './textures/blocks/stone_bump.png';
                 break;
             default:
-                texturePath = './textures/default.png';
-                bumpPath = './textures/default_bump.png';
+                texturePath = './textures/blocks/default.png';
+                bumpPath = './textures/blocks/default_bump.png';
                 break;
         }
     }
@@ -73,7 +75,6 @@ function getBlockMaterial(block, isTopFace = false) {
 }
 
 
-// Helper to get or create an InstancedMesh array for a given block type
 function getInstancedMeshesForMaterial(materialKey) {
     if (!meshes[materialKey]) {
         meshes[materialKey] = []; // Initialize as an array to hold multiple InstancedMeshes if needed
@@ -82,14 +83,68 @@ function getInstancedMeshesForMaterial(materialKey) {
 }
 
 
-function loadFlowerModel(scene, posX, posY, posZ, flowerIndex) {
-    const loader = new GLTFLoader();
-    loader.load(`./vox_models/flower-${flowerIndex}.glb`, function(gltf) {
-        const flowerModel = gltf.scene.clone();
-        flowerModel.position.set(posX, posY, posZ);
-        flowerModel.scale.set(0.6, 0.6, 0.6); // Масштабуйте квітку за потреби
-        scene.add(flowerModel);
-    });
+function createFlowerPlaneMaterial(flowerType) {
+    if (!materials[flowerType]) {
+        const texture = textureLoader.load(`./textures/flowers/${flowerType}.png`);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.minFilter = THREE.LinearMipmapNearestFilter;
+        texture.magFilter = THREE.NearestFilter;
+        texture.generateMipmaps = true;
+
+        materials[flowerType] = new THREE.MeshBasicMaterial({
+            map: texture,
+            side: THREE.DoubleSide,
+            transparent: true, // Ensure transparency works for flowers
+        });
+    }
+    return materials[flowerType];
+}
+
+
+function getOrCreateFlowerInstancedMesh(scene, flowerType) {
+    if (!flowerMeshes[flowerType]) {
+        const geometry = new THREE.PlaneGeometry(1, 1);
+        const material = createFlowerPlaneMaterial(flowerType);
+
+        const instancedMesh = new THREE.InstancedMesh(geometry, material, maxFlowerInstances);
+        instancedMesh.count = 0; // Track number of active instances
+        flowerMeshes[flowerType] = instancedMesh;
+        scene.add(instancedMesh);
+    }
+    return flowerMeshes[flowerType];
+}
+
+
+function spawnFlowerInstance(scene, posX, posY, posZ, flowerType) {
+    const instancedMesh = getOrCreateFlowerInstancedMesh(scene, flowerType);
+
+    if (instancedMesh.count >= maxFlowerInstances) {
+        console.warn(`Max instances reached for ${flowerType}`);
+        return;
+    }
+
+    // First flower plane
+    const tempMatrix1 = new THREE.Matrix4();
+    tempMatrix1.compose(
+        new THREE.Vector3(posX, posY, posZ),
+        new THREE.Quaternion().setFromEuler(new THREE.Euler(0, - Math.PI / 4, 0)), // No rotation
+        new THREE.Vector3(1.0, 1.0, 1.0) // Adjust scale as needed
+    );
+
+    instancedMesh.setMatrixAt(instancedMesh.count++, tempMatrix1);
+
+    // Second flower plane (rotated by 90 degrees)
+    const tempMatrix2 = new THREE.Matrix4();
+    tempMatrix2.compose(
+        new THREE.Vector3(posX, posY, posZ),
+        new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI / 4, 0)), // 90 degree rotation
+        new THREE.Vector3(1.0, 1.0, 1.0) // Adjust scale as needed
+    );
+
+    instancedMesh.setMatrixAt(instancedMesh.count++, tempMatrix2);
+
+    // Mark the instanced mesh as needing an update
+    instancedMesh.instanceMatrix.needsUpdate = true;
 }
 
 
@@ -100,12 +155,12 @@ function renderChunk(scene, chunkX, chunkZ) {
     const tempMatrix = new THREE.Matrix4();
 
     const directions = [
-        { offset: [-1, 0, 0], rotation: [0, Math.PI / 2, 0], isTopFace: false },   // Left
-        { offset: [1, 0, 0], rotation: [0, -Math.PI / 2, 0], isTopFace: false },   // Right
-        { offset: [0, -1, 0], rotation: [Math.PI / 2, 0, 0], isTopFace: false },   // Bottom
-        { offset: [0, 1, 0], rotation: [-Math.PI / 2, 0, 0], isTopFace: true },    // Top
-        { offset: [0, 0, -1], rotation: [0, 0, 0], isTopFace: false },             // Front
-        { offset: [0, 0, 1], rotation: [0, Math.PI, 0] }                           // Back
+        { offset: [-1, 0, 0], rotation: [0, Math.PI / 2, 0], isTopFace: false },
+        { offset: [1, 0, 0], rotation: [0, -Math.PI / 2, 0], isTopFace: false },
+        { offset: [0, -1, 0], rotation: [Math.PI / 2, 0, 0], isTopFace: false },
+        { offset: [0, 1, 0], rotation: [-Math.PI / 2, 0, 0], isTopFace: true },
+        { offset: [0, 0, -1], rotation: [0, 0, 0], isTopFace: false },
+        { offset: [0, 0, 1], rotation: [0, Math.PI, 0] }
     ];
 
     landscape.forEach((column, x) => {
@@ -118,24 +173,21 @@ function renderChunk(scene, chunkX, chunkZ) {
                 const posY = y;
                 const posZ = chunkZ + z;
 
-                // Перевірка на квітку
-                if (block.startsWith('flower-')) {
-                    const flowerIndex = block.split('-')[1];
-                    loadFlowerModel(scene, posX, posY - 0.5, posZ, flowerIndex); // Завантажуємо модель квітки
+                if (block.startsWith('flower_')) {
+                    const flowerType = block; // e.g., "flower_1"
+                    spawnFlowerInstance(scene, posX, posY, posZ, flowerType);
                     return;
                 }
 
-                // Інакше обробляємо як звичайний блок
                 directions.forEach(({ offset, rotation, isTopFace }) => {
                     const [nx, ny, nz] = [x + offset[0], y + offset[1], z + offset[2]];
 
-                    // Перевіряємо, чи сусідній блок є порожнім або квіткою
                     const isNeighborEmptyOrFlower = 
                         nx < 0 || nx >= landscape.length ||
                         nz < 0 || nz >= landscape[0].length ||
                         ny < 0 || ny >= landscape[0][0].length ||
                         landscape[nx]?.[nz]?.[ny]?.block === 'air' ||
-                        (landscape[nx]?.[nz]?.[ny]?.block?.startsWith('flower-'));
+                        (landscape[nx]?.[nz]?.[ny]?.block?.startsWith('flower_'));
 
                     if (isNeighborEmptyOrFlower) {
                         const materialKey = isTopFace && block === 'grass' ? 'grass_top' : block;
@@ -167,11 +219,15 @@ function renderChunk(scene, chunkX, chunkZ) {
         });
     });
 
+    // Update instance matrices for blocks
     Object.values(meshes).forEach(instancedMeshes => {
         instancedMeshes.forEach(mesh => {
             mesh.instanceMatrix.needsUpdate = true;
         });
     });
+
+    // Render flowers after blocks
+    // renderFlowerInstances(scene);
 }
 
 
