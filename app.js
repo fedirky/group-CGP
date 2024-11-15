@@ -14,11 +14,12 @@ import { renderSingleChunk, createClouds } from './render.js';
 let app_settings = {};
 
 // Function to load settings
+// Function to load settings
 function loadSettings() {
     return fetch('./settings.json')
         .then(response => {
             if (!response.ok) {
-                throw new Error('Network response was not ok' + response.statusText);
+                throw new Error('Settings file not found');
             }
             return response.json();
         })
@@ -27,7 +28,22 @@ function loadSettings() {
             console.log("Settings loaded:", app_settings);
         })
         .catch(error => {
-            console.error('Error loading settings:', error);
+            console.warn('Settings file not found, using default settings.');
+            // Завантажуємо дефолтні налаштування з settings_example.json
+            return fetch('./settings_example.json')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Default settings file not found');
+                    }
+                    return response.json();
+                })
+                .then(defaultSettings => {
+                    app_settings = defaultSettings;
+                    console.log("Default settings loaded:", app_settings);
+                })
+                .catch(defaultError => {
+                    console.error('Error loading default settings:', defaultError);
+                });
         });
 }
 
