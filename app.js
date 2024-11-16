@@ -59,6 +59,8 @@ document.body.appendChild(renderer.domElement);
 
 // Camera setup
 camera.position.set(20, 15, 30);
+camera.layers.enable(0); // Основний шар
+camera.layers.enable(1); // Шар квітів і хмар
 
 // Add a directional light
 const directionalLight = new THREE.DirectionalLight(0xffffcc, 5); // White light

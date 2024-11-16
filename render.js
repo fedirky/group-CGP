@@ -20,7 +20,7 @@ function getBlockTexture(block, isTopFace = false) {
         switch (block) {
             case 'dirt':
                 texturePath = './textures/blocks/dirt.png';
-                bumpPath = './textures/dirt_bump.png';
+                bumpPath = './textures/blocks/dirt_bump.png';
                 break;
             case 'water':
                 texturePath = './textures/blocks/water.png';
@@ -94,7 +94,10 @@ function createFlowerPlaneMaterial(flowerType) {
         materials[flowerType] = new THREE.MeshBasicMaterial({
             map: texture,
             side: THREE.DoubleSide,
-            transparent: true, // Ensure transparency works for flowers
+            transparent: true,
+            alphaTest: 0.5,
+            depthWrite: false,
+            depthTest: true
         });
     }
     return materials[flowerType];
@@ -108,6 +111,7 @@ function getOrCreateFlowerInstancedMesh(scene, flowerType) {
 
         const instancedMesh = new THREE.InstancedMesh(geometry, material, maxFlowerInstances);
         instancedMesh.count = 0; // Track number of active instances
+
         flowerMeshes[flowerType] = instancedMesh;
         scene.add(instancedMesh);
     }
