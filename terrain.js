@@ -41,7 +41,7 @@ export function generateLandscape(chunkX, chunkZ) {
         }
     }
 
-    // Second loop: Set topmost dirt blocks to grass and add random flowers
+    // Second loop: Set topmost dirt blocks to grass, add random flowers, and convert water to ice
     for (let x = 0; x < width; x++) {
         for (let z = 0; z < depth; z++) {
             for (let y = maxHeight - 1; y >= 0; y--) {
@@ -58,9 +58,22 @@ export function generateLandscape(chunkX, chunkZ) {
                     }
                     break; // Stop after finding the first dirt block from the top
                 }
+
+                // Check for the topmost water block
+                if (landscape[x][z][y].block === 'water') {
+                    // If it's the topmost block or the block above is air
+                    if (y === maxHeight - 1 || landscape[x][z][y + 1].block === 'air') {
+                        // With a probability of 0.25, turn it into ice
+                        if (Math.random() < 0.25) {
+                            landscape[x][z][y].block = 'ice';
+                        }
+                    }
+                    break; // Stop after processing the topmost water block
+                }
             }
         }
     }
+
 
     return landscape;
 }

@@ -199,6 +199,9 @@ function animate() {
     renderer.autoClearDepth = false;
     renderer.render(scene, camera);
     
+
+
+
     controls.update(0.01);
 }
 

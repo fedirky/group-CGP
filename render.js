@@ -26,7 +26,11 @@ function getBlockTexture(block, isTopFace = false) {
                 break;
             case 'water':
                 texturePath = './textures/blocks/water.mp4';
-                bumpPath = './textures/blocks/water_bump.png';
+                bumpPath = './textures/blocks/no_bump.png';
+                break;
+            case 'ice':
+                texturePath = './textures/blocks/ice.png';
+                bumpPath = './textures/blocks/no_bump.png';
                 break;
             case 'sand':
                 texturePath = './textures/blocks/sand.png';
@@ -79,23 +83,38 @@ function getBlockMaterial(block, isTopFace = false) {
     const textureKey = isTopFace && block === 'grass' ? 'grass_top' : block;
     if (!materials[textureKey]) {
         const { map, bumpMap } = getBlockTexture(block, isTopFace);
-        const materialConfig = {
+        let materialConfig = {
             map: map,
             bumpMap: bumpMap,
             bumpScale: globalBumpScale,
             side: THREE.DoubleSide,
         };
 
-        // Special case for water (transparency and material settings)
-        if (block === 'water') {
+        // Special case for ice (using Phong material)
+        if (block === 'ice') {
+            materialConfig = {
+                map: map,
+                bumpMap: bumpMap,
+                bumpScale: globalBumpScale,
+                side: THREE.DoubleSide,
+                shininess: 10,
+                specular: new THREE.Color(0x99ccff),
+                transparent: true, // Додаємо прозорість
+                opacity: 1.0,      // Невелика прозорість
+                depthWrite: true,  // Дозволяє писати в буфер глибини
+            };
+            materials[textureKey] = new THREE.MeshPhongMaterial(materialConfig);
+        } else if (block === 'water') {
+            // Special case for water (transparency and material settings)
             Object.assign(materialConfig, {
-                transparent: true,
-                opacity: 0.75,
-                depthWrite: false,
+                transparent: false,
+                opacity: 1.00,
+                depthWrite: true,
             });
+            materials[textureKey] = new THREE.MeshLambertMaterial(materialConfig);
+        } else {
+            materials[textureKey] = new THREE.MeshLambertMaterial(materialConfig);
         }
-
-        materials[textureKey] = new THREE.MeshLambertMaterial(materialConfig);
     }
     return materials[textureKey];
 }
