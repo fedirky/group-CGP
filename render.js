@@ -10,6 +10,7 @@ const flowerMeshes = {};
 
 const globalBumpScale = 1.2;
 
+
 function getBlockTexture(block, isTopFace = false) {
     let texturePath, bumpPath;
     let texture;
@@ -78,16 +79,26 @@ function getBlockMaterial(block, isTopFace = false) {
     const textureKey = isTopFace && block === 'grass' ? 'grass_top' : block;
     if (!materials[textureKey]) {
         const { map, bumpMap } = getBlockTexture(block, isTopFace);
-        materials[textureKey] = new THREE.MeshLambertMaterial({
+        const materialConfig = {
             map: map,
             bumpMap: bumpMap,
             bumpScale: globalBumpScale,
-            side: THREE.DoubleSide
-        });
+            side: THREE.DoubleSide,
+        };
+
+        // Special case for water (transparency and material settings)
+        if (block === 'water') {
+            Object.assign(materialConfig, {
+                transparent: true,
+                opacity: 0.75,
+                depthWrite: false,
+            });
+        }
+
+        materials[textureKey] = new THREE.MeshLambertMaterial(materialConfig);
     }
     return materials[textureKey];
 }
-
 
 
 function getInstancedMeshesForMaterial(materialKey) {
@@ -173,14 +184,32 @@ function renderChunk(scene, chunkX, chunkZ) {
     const maxInstancesPerMesh = 1024;
     const tempMatrix = new THREE.Matrix4();
 
-    const directions = [
-        { offset: [-1, 0, 0], rotation: [0, Math.PI / 2, 0], isTopFace: false },
-        { offset: [1, 0, 0], rotation: [0, -Math.PI / 2, 0], isTopFace: false },
-        { offset: [0, -1, 0], rotation: [Math.PI / 2, 0, 0], isTopFace: false },
-        { offset: [0, 1, 0], rotation: [-Math.PI / 2, 0, 0], isTopFace: true },
-        { offset: [0, 0, -1], rotation: [0, 0, 0], isTopFace: false },
-        { offset: [0, 0, 1], rotation: [0, Math.PI, 0], isTopFace: false }
-    ];
+    const renderFace = (block, posX, posY, posZ, offset, rotation, isTopFace) => {
+        const materialKey = block === 'grass' && isTopFace ? 'grass_top' : block;
+        const material = getBlockMaterial(block, isTopFace);
+        const instancedMeshes = getInstancedMeshesForMaterial(materialKey);
+        let instancedMesh = instancedMeshes[instancedMeshes.length - 1];
+
+        if (!instancedMesh || instancedMesh.count >= maxInstancesPerMesh) {
+            const geometry = new THREE.PlaneGeometry(cubeSize, cubeSize);
+            instancedMesh = new THREE.InstancedMesh(geometry, material, maxInstancesPerMesh);
+            instancedMesh.count = 0;
+            instancedMesh.layers.set(0);
+            instancedMeshes.push(instancedMesh);
+            scene.add(instancedMesh);
+        }
+
+        tempMatrix.compose(
+            new THREE.Vector3(
+                posX * cubeSize + offset[0] * cubeSize / 2,
+                posY * cubeSize + offset[1] * cubeSize / 2,
+                posZ * cubeSize + offset[2] * cubeSize / 2
+            ),
+            new THREE.Quaternion().setFromEuler(new THREE.Euler(...rotation)),
+            new THREE.Vector3(1, 1, 1)
+        );
+        instancedMesh.setMatrixAt(instancedMesh.count++, tempMatrix);
+    };
 
     landscape.forEach((column, x) => {
         column.forEach((row, z) => {
@@ -193,98 +222,48 @@ function renderChunk(scene, chunkX, chunkZ) {
                 const posZ = chunkZ + z;
 
                 if (block.startsWith('flower_')) {
-                    const flowerType = block; // e.g., "flower_1"
-                    spawnFlowerInstance(scene, posX, posY, posZ, flowerType);
+                    spawnFlowerInstance(scene, posX, posY, posZ, block);
                     return;
                 }
 
-                directions.forEach(({ offset, rotation, isTopFace }) => {
+                const neighbors = [
+                    { offset: [-1, 0, 0], rotation: [0, Math.PI / 2, 0], isTopFace: false },
+                    { offset: [1, 0, 0], rotation: [0, -Math.PI / 2, 0], isTopFace: false },
+                    { offset: [0, -1, 0], rotation: [Math.PI / 2, 0, 0], isTopFace: false },
+                    { offset: [0, 1, 0], rotation: [-Math.PI / 2, 0, 0], isTopFace: true },
+                    { offset: [0, 0, -1], rotation: [0, 0, 0], isTopFace: false },
+                    { offset: [0, 0, 1], rotation: [0, Math.PI, 0], isTopFace: false },
+                ];
+
+                neighbors.forEach(({ offset, rotation, isTopFace }) => {
                     const [nx, ny, nz] = [x + offset[0], y + offset[1], z + offset[2]];
 
-                    const isNeighborAirOrFlower =
+                    const neighborBlock =
                         nx < 0 || nx >= landscape.length ||
                         nz < 0 || nz >= landscape[0].length ||
-                        ny < 0 || ny >= landscape[0][0].length ||
-                        landscape[nx]?.[nz]?.[ny]?.block === 'air' ||
-                        (landscape[nx]?.[nz]?.[ny]?.block?.startsWith('flower_'));
+                        ny < 0 || ny >= landscape[0][0].length
+                            ? 'air'
+                            : landscape[nx]?.[nz]?.[ny]?.block;
 
-                        if (block === 'water') {
-                            // Рендеримо грані води, які межують із повітрям або квітами
-                            if (isNeighborAirOrFlower) {
-                                const materialKey = 'water';
-                                const material = getBlockMaterial(block);
-                                const instancedMeshes = getInstancedMeshesForMaterial(materialKey);
-                                let instancedMesh = instancedMeshes[instancedMeshes.length - 1];
-                        
-                                if (!instancedMesh || instancedMesh.count >= maxInstancesPerMesh - 6) {
-                                    const geometry = new THREE.PlaneGeometry(cubeSize, cubeSize);
-                                    instancedMesh = new THREE.InstancedMesh(geometry, material, maxInstancesPerMesh);
-                                    instancedMesh.count = 0;
-                                    instancedMesh.layers.set(0);
-                                    instancedMeshes.push(instancedMesh);
-                                    scene.add(instancedMesh);
-                                }
-                        
-                                const adjustedPosY = posY - (isTopFace ? cubeSize / 8 : 0); // Знижуємо верхню грань на 1/16
-                        
-                                tempMatrix.compose(
-                                    new THREE.Vector3(
-                                        posX * cubeSize + offset[0] * cubeSize / 2,
-                                        adjustedPosY + offset[1] * cubeSize / 2,
-                                        posZ * cubeSize + offset[2] * cubeSize / 2
-                                    ),
-                                    new THREE.Quaternion().setFromEuler(new THREE.Euler(...rotation)),
-                                    new THREE.Vector3(1, 1, 1)
-                                );
-                        
-                                instancedMesh.setMatrixAt(instancedMesh.count++, tempMatrix);
-                            }
-                        } else {
-                        // Рендеримо грані інших блоків, які межують із водою, повітрям або квітами
-                        const isNeighborEmptyOrFlowerOrWater =
-                            isNeighborAirOrFlower ||
-                            (landscape[nx]?.[nz]?.[ny]?.block === 'water');
+                    const isExposed = neighborBlock === 'air' || neighborBlock.startsWith('flower_');
 
-                        if (isNeighborEmptyOrFlowerOrWater) {
-                            const materialKey = isTopFace && block === 'grass' ? 'grass_top' : block;
-                            const material = getBlockMaterial(block, isTopFace && block === 'grass');
-                            const instancedMeshes = getInstancedMeshesForMaterial(materialKey);
-                            let instancedMesh = instancedMeshes[instancedMeshes.length - 1];
-
-                            if (!instancedMesh || instancedMesh.count >= maxInstancesPerMesh - 6) {
-                                const geometry = new THREE.PlaneGeometry(cubeSize, cubeSize);
-                                instancedMesh = new THREE.InstancedMesh(geometry, material, maxInstancesPerMesh);
-                                instancedMesh.count = 0;
-                                instancedMesh.layers.set(0);
-                                instancedMeshes.push(instancedMesh);
-                                scene.add(instancedMesh);
-                            }
-
-                            tempMatrix.compose(
-                                new THREE.Vector3(
-                                    posX * cubeSize + offset[0] * cubeSize / 2,
-                                    posY * cubeSize + offset[1] * cubeSize / 2,
-                                    posZ * cubeSize + offset[2] * cubeSize / 2
-                                ),
-                                new THREE.Quaternion().setFromEuler(new THREE.Euler(...rotation)),
-                                new THREE.Vector3(1, 1, 1)
-                            );
-                            instancedMesh.setMatrixAt(instancedMesh.count++, tempMatrix);
-                        }
+                    if (block === 'water' && isTopFace && isExposed) {
+                        renderFace(block, posX, posY - cubeSize / 8, posZ, offset, rotation, true);
+                    } else if (block !== 'water' && (isExposed || neighborBlock === 'water')) {
+                        renderFace(block, posX, posY, posZ, offset, rotation, isTopFace);
                     }
                 });
             });
         });
     });
 
-    // Оновлюємо матриці інстансів для блоків
+    // Update instance matrices
     Object.values(meshes).forEach(instancedMeshes => {
         instancedMeshes.forEach(mesh => {
             mesh.instanceMatrix.needsUpdate = true;
         });
     });
 }
-
 
 
 export function renderSingleChunk(scene, chunkX, chunkZ) {
