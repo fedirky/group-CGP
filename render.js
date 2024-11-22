@@ -12,6 +12,7 @@ const globalBumpScale = 1.2;
 
 function getBlockTexture(block, isTopFace = false) {
     let texturePath, bumpPath;
+    let texture;
 
     if (block === 'grass') {
         texturePath = isTopFace ? './textures/blocks/grass.png' : './textures/blocks/grass_side.png';
@@ -23,8 +24,8 @@ function getBlockTexture(block, isTopFace = false) {
                 bumpPath = './textures/blocks/dirt_bump.png';
                 break;
             case 'water':
-                texturePath = './textures/blocks/water.gif';
-                bumpPath = './textures/blocks/dirt_bump.png';
+                texturePath = './textures/blocks/water.mp4';
+                bumpPath = './textures/blocks/water_bump.png';
                 break;
             case 'sand':
                 texturePath = './textures/blocks/sand.png';
@@ -36,21 +37,38 @@ function getBlockTexture(block, isTopFace = false) {
                 break;
         }
     }
+
+    if (block === 'water') {
+        const video = document.createElement('video');
+        video.src = texturePath;
+        video.loop = true;
+        video.muted = true;
+        video.playsInline = true;
+        video.autoplay = true;
     
-    const texture = textureLoader.load(texturePath);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.minFilter = THREE.LinearMipmapNearestFilter;
-    texture.magFilter = THREE.NearestFilter;
-    texture.generateMipmaps = true;
-    texture.anisotropy = 16;
-    texture.needsUpdate = true;
+        video.addEventListener('loadeddata', () => {
+            video.play();
+        });
+    
+        texture = new THREE.VideoTexture(video);
+        texture.colorSpace = THREE.SRGBColorSpace; // Додаємо правильний колірний простір
+        texture.minFilter = THREE.LinearFilter; // Вимикаємо міпмапи
+        texture.magFilter = THREE.LinearFilter;
+        texture.generateMipmaps = false; // Вимикаємо генерацію міпмапів
+    } else {
+        texture = textureLoader.load(texturePath);
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.minFilter = THREE.LinearMipmapNearestFilter;
+        texture.magFilter = THREE.NearestFilter;
+        texture.generateMipmaps = true;
+        texture.anisotropy = 16;
+    }
 
     const bumpMap = textureLoader.load(bumpPath);
     bumpMap.minFilter = THREE.LinearMipmapNearestFilter;
     bumpMap.magFilter = THREE.NearestFilter;
     bumpMap.generateMipmaps = true;
     bumpMap.anisotropy = 16;
-    bumpMap.needsUpdate = true;
 
     return { map: texture, bumpMap: bumpMap };
 }
