@@ -50,7 +50,7 @@ function loadSettings() {
 loadSettings();
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87CEEB);
+// scene.background = new THREE.Color(0x87CEEB);
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false}); // Allow transparent background
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -171,10 +171,6 @@ function updateComposerSize() {
 // Add event handler for window resize
 window.addEventListener('resize', updateComposerSize);
 
-function adjustSAOScale() {
-    const distance = camera.position.length(); // Distance from origin or target point
-    saoPass.params.saoScale = 128 * 2.5 / distance; // Scale down with distance
-}
 
 // Animation loop
 function animate() {
@@ -191,9 +187,19 @@ function animate() {
     }
 
     requestAnimationFrame(animate);
+
+    camera.layers.set(0); // Render only layer 0
+    renderer.autoClear = true; // Enable clearing for the first pass
+    renderer.autoClearDepth = true;
+    composer.render();
+
+    // camera.layers.enable(0);
+    camera.layers.set(1); // Render only layer 1
+    renderer.autoClear = false; // Disable clearing to overlay on the previous render
+    renderer.autoClearDepth = false;
+    renderer.render(scene, camera);
+    
     controls.update(0.01);
-    //adjustSAOScale(); // Adjust SAO scale based on distance
-    composer.render(); // Use composer for rendering with SAO
 }
 
 animate();

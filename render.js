@@ -1,6 +1,5 @@
 import * as THREE from './three.r168.module.js';
 import { generateLandscape } from './terrain.js';
-import { GLTFLoader } from './postprocessing/GLTFLoader.js';
 
 
 const textureLoader = new THREE.TextureLoader();
@@ -9,13 +8,14 @@ const meshes = {}; // Store arrays of InstancedMeshes by block type
 const maxFlowerInstances = 1024;
 const flowerMeshes = {};
 
+const globalBumpScale = 1.2;
 
 function getBlockTexture(block, isTopFace = false) {
     let texturePath, bumpPath;
 
     if (block === 'grass') {
         texturePath = isTopFace ? './textures/blocks/grass.png' : './textures/blocks/grass_side.png';
-        bumpPath = './textures/blocks/grass_bump.png';
+        bumpPath = './textures/blocks/dirt_bump.png';
     } else {
         switch (block) {
             case 'dirt':
@@ -23,8 +23,8 @@ function getBlockTexture(block, isTopFace = false) {
                 bumpPath = './textures/blocks/dirt_bump.png';
                 break;
             case 'water':
-                texturePath = './textures/blocks/water.png';
-                bumpPath = './textures/blocks/water_bump.png';
+                texturePath = './textures/blocks/water.gif';
+                bumpPath = './textures/blocks/dirt_bump.png';
                 break;
             case 'sand':
                 texturePath = './textures/blocks/sand.png';
@@ -34,13 +34,9 @@ function getBlockTexture(block, isTopFace = false) {
                 texturePath = './textures/blocks/stone.png';
                 bumpPath = './textures/blocks/stone_bump.png';
                 break;
-            default:
-                texturePath = './textures/blocks/default.png';
-                bumpPath = './textures/blocks/default_bump.png';
-                break;
         }
     }
-
+    
     const texture = textureLoader.load(texturePath);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.minFilter = THREE.LinearMipmapNearestFilter;
@@ -67,12 +63,13 @@ function getBlockMaterial(block, isTopFace = false) {
         materials[textureKey] = new THREE.MeshLambertMaterial({
             map: map,
             bumpMap: bumpMap,
-            bumpScale: 1.2,
+            bumpScale: globalBumpScale,
             side: THREE.DoubleSide
         });
     }
     return materials[textureKey];
 }
+
 
 
 function getInstancedMeshesForMaterial(materialKey) {
@@ -94,7 +91,7 @@ function createFlowerPlaneMaterial(flowerType) {
         materials[flowerType] = new THREE.MeshBasicMaterial({
             map: texture,
             side: THREE.DoubleSide,
-            transparent: true,
+            transparent: true, // Ensure transparency works for flowers
             alphaTest: 0.5,
             depthWrite: false,
             depthTest: true
@@ -111,7 +108,7 @@ function getOrCreateFlowerInstancedMesh(scene, flowerType) {
 
         const instancedMesh = new THREE.InstancedMesh(geometry, material, maxFlowerInstances);
         instancedMesh.count = 0; // Track number of active instances
-
+        instancedMesh.layers.set(1);
         flowerMeshes[flowerType] = instancedMesh;
         scene.add(instancedMesh);
     }
@@ -203,6 +200,7 @@ function renderChunk(scene, chunkX, chunkZ) {
                             const geometry = new THREE.PlaneGeometry(cubeSize, cubeSize);
                             instancedMesh = new THREE.InstancedMesh(geometry, material, maxInstancesPerMesh);
                             instancedMesh.count = 0;
+                            instancedMesh.layers.set(0);
                             instancedMeshes.push(instancedMesh);
                             scene.add(instancedMesh);
                         }

@@ -14,7 +14,7 @@ export function generateLandscape(chunkX, chunkZ) {
     const maxHeight = 16; // Max height of the chunk
     const landscape = [];
 
-    // First loop: Populate landscape with stone, dirt, and air
+    // First loop: Populate landscape with stone, dirt, water, and air
     for (let x = 0; x < width; x++) {
         landscape[x] = [];
         for (let z = 0; z < depth; z++) {
@@ -30,6 +30,8 @@ export function generateLandscape(chunkX, chunkZ) {
                     block = 'stone';
                 } else if (y < dirtheight) {
                     block = 'dirt';
+                } else if (y < 11) {
+                    block = 'water'; // Замість повітря додаємо воду нижче рівня 12
                 } else {
                     block = 'air';
                 }
@@ -62,4 +64,5 @@ export function generateLandscape(chunkX, chunkZ) {
 
     return landscape;
 }
+
 
