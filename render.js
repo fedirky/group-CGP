@@ -25,7 +25,7 @@ function getBlockTexture(block, isTopFace = false) {
                 bumpPath = './textures/blocks/dirt_bump.png';
                 break;
             case 'water':
-                texturePath = './textures/blocks/water.mp4';
+                texturePath = './textures/blocks/water_16x16.mp4';
                 bumpPath = './textures/blocks/no_bump.png';
                 break;
             case 'ice':
@@ -57,8 +57,8 @@ function getBlockTexture(block, isTopFace = false) {
     
         texture = new THREE.VideoTexture(video);
         texture.colorSpace = THREE.SRGBColorSpace; // Додаємо правильний колірний простір
-        texture.minFilter = THREE.LinearFilter; // Вимикаємо міпмапи
-        texture.magFilter = THREE.LinearFilter;
+        texture.minFilter = THREE.NearestFilter; // Вимикаємо міпмапи
+        texture.magFilter = THREE.NearestFilter;
         texture.generateMipmaps = false; // Вимикаємо генерацію міпмапів
     } else {
         texture = textureLoader.load(texturePath);
@@ -99,16 +99,16 @@ function getBlockMaterial(block, isTopFace = false) {
                 side: THREE.DoubleSide,
                 shininess: 10,
                 specular: new THREE.Color(0x99ccff),
-                transparent: true, // Додаємо прозорість
-                opacity: 1.0,      // Невелика прозорість
-                depthWrite: true,  // Дозволяє писати в буфер глибини
+                transparent: false,
+                opacity: 1.0,
+                depthWrite: true,
             };
             materials[textureKey] = new THREE.MeshPhongMaterial(materialConfig);
         } else if (block === 'water') {
             // Special case for water (transparency and material settings)
             Object.assign(materialConfig, {
-                transparent: false,
-                opacity: 1.00,
+                transparent: true,
+                opacity: 0.75,
                 depthWrite: true,
             });
             materials[textureKey] = new THREE.MeshLambertMaterial(materialConfig);
@@ -141,7 +141,7 @@ function createFlowerPlaneMaterial(flowerType) {
             side: THREE.DoubleSide,
             transparent: true, // Ensure transparency works for flowers
             alphaTest: 0.5,
-            depthWrite: false,
+            depthWrite: true,
             depthTest: true
         });
     }

@@ -78,6 +78,8 @@ directionalLight.shadow.camera.far = 64; // Default
 const ambientLight = new THREE.AmbientLight(0x404040, 15); // Soft white light
 scene.add(ambientLight);
 
+// Add fog
+scene.fog = new THREE.FogExp2(0xffffff, 0.01); 
 
 let frameCount = 0;
 let lastTime = performance.now();
@@ -172,6 +174,51 @@ function updateComposerSize() {
 window.addEventListener('resize', updateComposerSize);
 
 
+//Add fog shaider
+const FogShader = {
+    uniforms: {
+        tDiffuse: { value: null }, // Вхідна текстура сцени
+        uFogColor: { value: new THREE.Color(0xcccccc) }, // Колір туману
+        uFogDensity: { value: 0.05 }, // Щільність туману
+        uCameraDepth: { value: 1.0 } // Глибина сцени (можна налаштувати)
+    },
+    vertexShader: `
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `,
+    fragmentShader: `
+        uniform sampler2D tDiffuse; // Вхідна текстура сцени
+        uniform vec3 uFogColor;     // Колір туману
+        uniform float uFogDensity;  // Щільність туману
+
+        varying vec2 vUv;
+
+        void main() {
+            vec4 sceneColor = texture2D(tDiffuse, vUv);
+
+            // Отримуємо значення глибини з нормалізованого простору
+            float depth = gl_FragCoord.z / gl_FragCoord.w;
+
+            // Обчислюємо щільність туману
+            float fogFactor = exp(-uFogDensity * depth);
+            fogFactor = clamp(fogFactor, 0.0, 1.0);
+
+            // Міксуємо кольори туману та сцени
+            vec3 color = mix(uFogColor, sceneColor.rgb, fogFactor);
+
+            gl_FragColor = vec4(color, sceneColor.a);
+        }
+    `
+};
+
+const fogPass = new ShaderPass(FogShader);
+fogPass.uniforms.uFogColor.value = new THREE.Color(0xaaaaaa); // Колір туману
+fogPass.uniforms.uFogDensity.value = 0.2; // Налаштування щільності
+composer.addPass(fogPass);
+
 // Animation loop
 function animate() {
     const currentTime = performance.now();
@@ -199,9 +246,7 @@ function animate() {
     renderer.autoClearDepth = false;
     renderer.render(scene, camera);
     
-
-
-
+    
     controls.update(0.01);
 }
 
