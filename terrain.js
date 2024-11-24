@@ -71,38 +71,50 @@ export function generateLandscape(chunkX, chunkZ) {
         }
     }
 
-    // Third loop: Set topmost dirt blocks to grass, add random flowers, and convert water to ice
-    for (let x = 0; x < width; x++) {
-        for (let z = 0; z < depth; z++) {
-            for (let y = maxHeight - 1; y >= 0; y--) {
-                if (landscape[x][z][y].block === 'dirt') {
-                    // If no blocks are above, set to grass
-                    if (y === maxHeight - 1 || landscape[x][z][y + 1].block === 'air') {
-                        landscape[x][z][y].block = 'grass';
+    // Third loop: Set topmost dirt blocks to grass, add random flowers, generate sugarcane, and convert water to ice
+for (let x = 0; x < width; x++) {
+    for (let z = 0; z < depth; z++) {
+        for (let y = maxHeight - 1; y >= 0; y--) {
+            if (landscape[x][z][y].block === 'dirt') {
+                // If no blocks are above, set to grass
+                if (y === maxHeight - 1 || landscape[x][z][y + 1].block === 'air') {
+                    landscape[x][z][y].block = 'grass';
 
-                        // With a 2.5% probability, add a random flower above grass
-                        if (Math.random() < 0.025) {
-                            const flowerType = `flower_${Math.floor(Math.random() * 7) + 1}`;
-                            landscape[x][z][y + 1] = { block: flowerType };
+                    // With a 2.5% probability, add a random flower above grass
+                    if (Math.random() < 0.025) {
+                        const flowerType = `flower_${Math.floor(Math.random() * 7) + 1}`;
+                        landscape[x][z][y + 1] = { block: flowerType };
+                    }
+                }
+                break; // Stop after finding the first dirt block from the top
+            }
+
+            if (landscape[x][z][y].block === 'sand') {
+                // Generate sugarcane with a 5% probability
+                if (Math.random() < 0.05 && (y === maxHeight - 1 || landscape[x][z][y + 1].block === 'air')) {
+                    const sugarCaneHeight = Math.floor(Math.random() * 3) + 1; // Random height: 1 to 3
+                    for (let h = 1; h <= sugarCaneHeight; h++) {
+                        if (y + h < maxHeight) { // Ensure within bounds
+                            landscape[x][z][y + h] = { block: 'flower_sugar_cane' };
                         }
                     }
-                    break; // Stop after finding the first dirt block from the top
                 }
+            }
 
-                // Check for the topmost water block
-                if (landscape[x][z][y].block === 'water') {
-                    // If it's the topmost block or the block above is air
-                    if (y === maxHeight - 1 || landscape[x][z][y + 1].block === 'air') {
-                        // With a probability of 25%, turn it into ice
-                        if (Math.random() < 0.25) {
-                            landscape[x][z][y].block = 'ice';
-                        }
+            // Check for the topmost water block
+            if (landscape[x][z][y].block === 'water') {
+                // If it's the topmost block or the block above is air
+                if (y === maxHeight - 1 || landscape[x][z][y + 1].block === 'air') {
+                    // With a probability of 25%, turn it into ice
+                    if (Math.random() < 0.25) {
+                        landscape[x][z][y].block = 'ice';
                     }
-                    break; // Stop after processing the topmost water block
                 }
+                break; // Stop after processing the topmost water block
             }
         }
     }
+}
 
     return landscape;
 }
