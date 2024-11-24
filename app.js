@@ -8,7 +8,7 @@ import { OutputPass } from './postprocessing/OutputPass.js';
 import { ShaderPass } from './postprocessing/ShaderPass.js';
 import { FXAAShader } from './shaders/FXAAShader.js';
 
-import { renderSingleChunk, createClouds } from './render.js';
+import { updateWaterMaterials, renderSingleChunk, createClouds } from './render.js';
 
 // Define a global or module-scoped variable to store settings
 let app_settings = {};
@@ -178,6 +178,8 @@ function animate() {
     frameCount++;
 
     const deltaTime = currentTime - lastTime;
+
+    // Update FPS and vertex count every second
     if (deltaTime >= 1000) {
         const fps = (frameCount / (deltaTime / 1000)).toFixed(2);
         const vertices = countVertices(); // Count vertices
@@ -186,23 +188,25 @@ function animate() {
         lastTime = currentTime;
     }
 
+    // Request the next animation frame
     requestAnimationFrame(animate);
 
+    // Update water materials
+    updateWaterMaterials(camera, scene);
+
+    // Render layers
     camera.layers.set(0); // Render only layer 0
-    renderer.autoClear = true; // Enable clearing for the first pass
+    renderer.autoClear = true;
     renderer.autoClearDepth = true;
     composer.render();
 
-    // camera.layers.enable(0);
-    camera.layers.set(1); // Render only layer 1
-    renderer.autoClear = false; // Disable clearing to overlay on the previous render
+    camera.layers.set(1); // Render only layer 1 (water)
+    renderer.autoClear = false;
     renderer.autoClearDepth = false;
     renderer.render(scene, camera);
-    
-
-
 
     controls.update(0.01);
 }
+
 
 animate();

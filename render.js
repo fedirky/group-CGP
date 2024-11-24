@@ -1,4 +1,5 @@
 import * as THREE from './three.r168.module.js';
+
 import { generateLandscape } from './terrain.js';
 
 
@@ -9,6 +10,24 @@ const maxFlowerInstances = 1024;
 const flowerMeshes = {};
 
 const globalBumpScale = 1.2;
+
+
+function loadShaderSync(path) {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', path, false); // 'false' makes this request synchronous
+    xhr.send(null);
+
+    if (xhr.status === 200) {
+        return xhr.responseText;
+    } else {
+        console.error(`Failed to load shader: ${path}`);
+        return null;
+    }
+}
+
+// Load shaders synchronously
+const waterVertexShader = loadShaderSync('./shaders/water/waterVertex.glsl');
+const waterFragmentShader = loadShaderSync('./shaders/water/waterFragment.glsl');
 
 
 function getBlockTexture(block, isTopFace = false) {
@@ -25,8 +44,8 @@ function getBlockTexture(block, isTopFace = false) {
                 bumpPath = './textures/blocks/dirt_bump.png';
                 break;
             case 'water':
-                texturePath = './textures/blocks/water.mp4';
-                bumpPath = './textures/blocks/no_bump.png';
+                texturePath = './textures/liquids/water.png';
+                bumpPath = './textures/liquids/water_bump.png';
                 break;
             case 'ice':
                 texturePath = './textures/blocks/ice.png';
@@ -43,37 +62,18 @@ function getBlockTexture(block, isTopFace = false) {
         }
     }
 
-    if (block === 'water') {
-        const video = document.createElement('video');
-        video.src = texturePath;
-        video.loop = true;
-        video.muted = true;
-        video.playsInline = true;
-        video.autoplay = true;
-    
-        video.addEventListener('loadeddata', () => {
-            video.play();
-        });
-    
-        texture = new THREE.VideoTexture(video);
-        texture.colorSpace = THREE.SRGBColorSpace; // Додаємо правильний колірний простір
-        texture.minFilter = THREE.LinearFilter; // Вимикаємо міпмапи
-        texture.magFilter = THREE.LinearFilter;
-        texture.generateMipmaps = false; // Вимикаємо генерацію міпмапів
-    } else {
-        texture = textureLoader.load(texturePath);
-        texture.colorSpace = THREE.SRGBColorSpace;
-        texture.minFilter = THREE.LinearMipmapNearestFilter;
-        texture.magFilter = THREE.NearestFilter;
-        texture.generateMipmaps = true;
-        texture.anisotropy = 16;
-    }
+    texture = textureLoader.load(texturePath);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.minFilter = THREE.LinearMipmapNearestFilter;
+    texture.magFilter = THREE.NearestFilter;
+    texture.generateMipmaps = true;
+    // texture.anisotropy = 16;
 
     const bumpMap = textureLoader.load(bumpPath);
     bumpMap.minFilter = THREE.LinearMipmapNearestFilter;
     bumpMap.magFilter = THREE.NearestFilter;
     bumpMap.generateMipmaps = true;
-    bumpMap.anisotropy = 16;
+    // bumpMap.anisotropy = 16;
 
     return { map: texture, bumpMap: bumpMap };
 }
@@ -81,42 +81,81 @@ function getBlockTexture(block, isTopFace = false) {
 
 function getBlockMaterial(block, isTopFace = false) {
     const textureKey = isTopFace && block === 'grass' ? 'grass_top' : block;
-    if (!materials[textureKey]) {
-        const { map, bumpMap } = getBlockTexture(block, isTopFace);
-        let materialConfig = {
-            map: map,
-            bumpMap: bumpMap,
-            bumpScale: globalBumpScale,
-            side: THREE.DoubleSide,
+
+    // Return cached material if it already exists
+    if (materials[textureKey]) return materials[textureKey];
+
+    // Handle general block materials
+    const { map, bumpMap } = getBlockTexture(block, isTopFace);
+    let materialConfig = {
+        map: map,
+        bumpMap: bumpMap,
+        bumpScale: globalBumpScale,
+        side: THREE.DoubleSide,
+    };
+
+    if (block === 'ice') {
+        // Special configuration for ice
+        Object.assign(materialConfig, {
+            shininess: 10,
+            specular: new THREE.Color(0x99ccff),
+            transparent: true,
+            opacity: 1.0,
+            depthWrite: true,
+        });
+        materials[textureKey] = new THREE.MeshPhongMaterial(materialConfig);
+    } else {
+        // Default material for all other blocks
+        materials[textureKey] = new THREE.MeshLambertMaterial(materialConfig);
+    }
+
+    // Special case for water
+    if (block === 'water') {
+        const waterMaterial = new THREE.ShaderMaterial({
+            vertexShader: waterVertexShader,
+            fragmentShader: waterFragmentShader,
+            uniforms: {
+                uTime: { value: 0.0 }, // Time for animation
+                uBaseColor: { value: new THREE.Color(0x74ccf4) }, // Base water color
+                uDeepColor: { value: new THREE.Color(0x0487e2) }, // Deep water color
+                uDepthTexture: { value: null }, // Optional: depth texture
+                uCameraNear: { value: camera.near },
+                uCameraFar: { value: camera.far },
+            },
+            transparent: true,
+        });
+
+        // Optional: Debug shader compilation
+        waterMaterial.onBeforeCompile = (shader) => {
+            console.log('Compiling Water Shader:', shader);
         };
 
-        // Special case for ice (using Phong material)
-        if (block === 'ice') {
-            materialConfig = {
-                map: map,
-                bumpMap: bumpMap,
-                bumpScale: globalBumpScale,
-                side: THREE.DoubleSide,
-                shininess: 10,
-                specular: new THREE.Color(0x99ccff),
-                transparent: true, // Додаємо прозорість
-                opacity: 1.0,      // Невелика прозорість
-                depthWrite: true,  // Дозволяє писати в буфер глибини
-            };
-            materials[textureKey] = new THREE.MeshPhongMaterial(materialConfig);
-        } else if (block === 'water') {
-            // Special case for water (transparency and material settings)
-            Object.assign(materialConfig, {
-                transparent: false,
-                opacity: 1.00,
-                depthWrite: true,
-            });
-            materials[textureKey] = new THREE.MeshLambertMaterial(materialConfig);
-        } else {
-            materials[textureKey] = new THREE.MeshLambertMaterial(materialConfig);
-        }
+        materials[textureKey] = waterMaterial;
+        return waterMaterial;
     }
+
     return materials[textureKey];
+}
+
+
+export function updateWaterMaterials(camera, scene) {
+    const currentTime = performance.now() * 0.001;
+
+    scene.traverse((object) => {
+        if (object.isMesh && object.userData.isWater) {
+            const material = object.material;
+
+            if (material.uniforms.uTime) {
+                material.uniforms.uTime.value = currentTime;
+            }
+            if (material.uniforms.uCameraNear) {
+                material.uniforms.uCameraNear.value = camera.near;
+            }
+            if (material.uniforms.uCameraFar) {
+                material.uniforms.uCameraFar.value = camera.far;
+            }
+        }
+    });
 }
 
 
