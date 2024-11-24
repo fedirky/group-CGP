@@ -57,6 +57,12 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true; // Enable shadow maps
 document.body.appendChild(renderer.domElement);
 
+const renderTarget = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight, {
+    depthTexture: new THREE.DepthTexture(),
+    depthBuffer: true,
+});
+renderer.setRenderTarget(renderTarget);
+
 // Camera setup
 camera.position.set(20, 15, 30);
 camera.layers.enable(0); // Основний шар
@@ -79,7 +85,7 @@ const ambientLight = new THREE.AmbientLight(0x404040, 15); // Soft white light
 scene.add(ambientLight);
 
 // Add fog
-scene.fog = new THREE.FogExp2(0xffffff, 0.01); 
+// scene.fog = new THREE.FogExp2(0xffffff, 0.01); 
 
 let frameCount = 0;
 let lastTime = performance.now();
@@ -124,6 +130,56 @@ function countVertices() {
     return vertexCount;
 }
 
+
+//Add fog shaider
+const FogShader = {
+    uniforms: {
+        tDiffuse: { value: null }, // Вхідна текстура сцени
+        uFogColor: { value: new THREE.Color(0xFF0000) }, // Колір туману
+        uFogDensity: { value: 0.5 }, // Щільність туману
+        uCameraDepth: { value: 1.0 } // Глибина сцени (можна налаштувати)
+    },
+    vertexShader: `
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `,
+    fragmentShader: `
+        uniform sampler2D tDiffuse;  // Input scene texture
+        uniform sampler2D tDepth;    // Depth texture
+        uniform vec3 uFogColor;      // Fog color
+        uniform float uFogDensity;   // Fog density
+
+        varying vec2 vUv;
+
+        float linearizeDepth(float depth) {
+            float near = 0.1; // Match the camera's near plane
+            float far = 1000.0; // Match the camera's far plane
+            return (2.0 * near) / (far + near - depth * (far - near));
+        }
+
+        void main() {
+            / * vec4 sceneColor = texture2D(tDiffuse, vUv);
+            float depth = texture2D(tDepth, vUv).r; // Read depth value
+            float linearDepth = linearizeDepth(depth);
+
+            // Calculate fog factor
+            float fogFactor = exp(-uFogDensity * linearDepth);
+            fogFactor = clamp(fogFactor, 0.0, 1.0);
+
+            // Mix fog and scene color
+            vec3 color = mix(uFogColor, sceneColor.rgb, fogFactor);
+
+            gl_FragColor = vec4(color, sceneColor.a); */
+            float depth = texture2D(tDepth, vUv).r;
+            gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0); // Display depth as grayscale
+        }
+    `
+};
+
+
 // Initialize post-processing
 const composer = new EffectComposer(renderer);
 const renderPass = new RenderPass(scene, camera);
@@ -148,76 +204,46 @@ loadSettings().then(() => {
         saoPass.enabled = true;
     }
 
+    const depthTexture = new THREE.DepthTexture();
+    depthTexture.type = THREE.UnsignedShortType; // Ensure it's readable in shaders
+
+    // Add fog shader pass after SAO but before final rendering
+    const fogPass = new ShaderPass(FogShader);
+    fogPass.uniforms.tDepth.value = renderTarget.depthTexture; // Pass the depth texture
+    fogPass.uniforms.uFogColor.value = new THREE.Color(0xaaaaaa); // Fog color
+    fogPass.uniforms.uFogDensity.value = 1.0; // Fog density
+    composer.addPass(fogPass);
+
+    // Add FXAA pass if enabled
     if (app_settings.graphics.fxaa) {
-        const fxaaPass = new ShaderPass(FXAAShader);
+        fxaaPass = new ShaderPass(FXAAShader);
         fxaaPass.material.uniforms['resolution'].value.set(1 / window.innerWidth, 1 / window.innerHeight);
         composer.addPass(fxaaPass);
     }
-});
 
-// Add OutputPass for output result
-const outputPass = new OutputPass();
-composer.addPass(outputPass);
+    // Add OutputPass for final output
+    const outputPass = new OutputPass();
+    composer.addPass(outputPass);
+
+    // Ensure the composer size updates dynamically
+    window.addEventListener('resize', updateComposerSize);
+});
 
 // Function to update composer size
 function updateComposerSize() {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    
-    renderer.setSize(width, height); // Set renderer size
-    composer.setSize(width, height); // Set composer size
+    if (app_settings.graphics.fxaa) {
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        
+        renderer.setSize(width, height); // Set renderer size
+        composer.setSize(width, height); // Set composer size
 
-    fxaaPass.material.uniforms['resolution'].value.set(1 / width, 1 / height);
+        fxaaPass.material.uniforms['resolution'].value.set(1 / width, 1 / height);
+    }
 }
 
 // Add event handler for window resize
 window.addEventListener('resize', updateComposerSize);
-
-
-//Add fog shaider
-const FogShader = {
-    uniforms: {
-        tDiffuse: { value: null }, // Вхідна текстура сцени
-        uFogColor: { value: new THREE.Color(0xcccccc) }, // Колір туману
-        uFogDensity: { value: 0.05 }, // Щільність туману
-        uCameraDepth: { value: 1.0 } // Глибина сцени (можна налаштувати)
-    },
-    vertexShader: `
-        varying vec2 vUv;
-        void main() {
-            vUv = uv;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-    `,
-    fragmentShader: `
-        uniform sampler2D tDiffuse; // Вхідна текстура сцени
-        uniform vec3 uFogColor;     // Колір туману
-        uniform float uFogDensity;  // Щільність туману
-
-        varying vec2 vUv;
-
-        void main() {
-            vec4 sceneColor = texture2D(tDiffuse, vUv);
-
-            // Отримуємо значення глибини з нормалізованого простору
-            float depth = gl_FragCoord.z / gl_FragCoord.w;
-
-            // Обчислюємо щільність туману
-            float fogFactor = exp(-uFogDensity * depth);
-            fogFactor = clamp(fogFactor, 0.0, 1.0);
-
-            // Міксуємо кольори туману та сцени
-            vec3 color = mix(uFogColor, sceneColor.rgb, fogFactor);
-
-            gl_FragColor = vec4(color, sceneColor.a);
-        }
-    `
-};
-
-const fogPass = new ShaderPass(FogShader);
-fogPass.uniforms.uFogColor.value = new THREE.Color(0xaaaaaa); // Колір туману
-fogPass.uniforms.uFogDensity.value = 0.2; // Налаштування щільності
-composer.addPass(fogPass);
 
 // Animation loop
 function animate() {
