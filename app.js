@@ -235,14 +235,29 @@ function animate() {
 
     requestAnimationFrame(animate);
 
-    camera.layers.set(0); // Render only layer 0
-    renderer.autoClear = true; // Enable clearing for the first pass
+    /**
+     * Main Rendering 
+     */
+    renderer.autoClear = true;
     renderer.autoClearDepth = true;
+    camera.layers.set(0);
     composer.render();
+        
+    /**
+     * Transparent Objects Rendering
+     */
 
-    // camera.layers.enable(0);
-    camera.layers.set(1); // Render only layer 1
-    renderer.autoClear = false; // Disable clearing to overlay on the previous render
+    // Render the entire scene again to find the depth that the Composer has now lost
+    // Disable writing to the color buffer, only write to the depth buffer.
+    // Hopefully this disables the color calculation in the fragment shader. If not, use an override material.
+    // Note, this does render the entire scene geometry again...
+    renderer.getContext().colorMask(false, false, false, false);
+    renderer.render(scene, camera);
+    renderer.getContext().colorMask(true, true, true, true);
+    
+    // Render the transparent objects while accounting for the already populated depth buffer
+    camera.layers.set(1);
+    renderer.autoClear = false;
     renderer.autoClearDepth = false;
     renderer.render(scene, camera);
     
