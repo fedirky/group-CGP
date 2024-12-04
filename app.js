@@ -9,6 +9,7 @@ import { ShaderPass } from './postprocessing/ShaderPass.js';
 import { FXAAShader } from './shaders/FXAAShader.js';
 
 import { renderSingleChunk, createClouds } from './render.js';
+import { updateLighting, setTestMode } from './utils/dayNightCycle.js';
 
 // Define a global or module-scoped variable to store settings
 let app_settings = {};
@@ -173,6 +174,26 @@ function updateComposerSize() {
 // Add event handler for window resize
 window.addEventListener('resize', updateComposerSize);
 
+// Keyboard controls for testing the day-night cycle
+document.addEventListener('keydown', (event) => {
+    const keyTimeMap = {
+        t: 6, // Dawn or Twilight
+        y: 9, // Morning
+        u: 13, // Afternoon
+        i: 17, // Dusk
+        o: 20, // Evening
+        p: 23, // Night
+    };
+
+    if (keyTimeMap[event.key] !== undefined) {
+        setTestMode(true, keyTimeMap[event.key]);
+        console.log(`Test Mode: ${event.key} - ${keyTimeMap[event.key]} hours`);
+    } else if (event.key === 'l') {
+        setTestMode(false);
+        console.log('Test Mode Disabled: Using Real Time');
+    }
+});
+
 
 //Add fog shaider
 const FogShader = {
@@ -234,6 +255,9 @@ function animate() {
     }
 
     requestAnimationFrame(animate);
+
+    // Update day-night cycle
+    updateLighting(scene, new Date());
 
     /**
      * Main Rendering 
