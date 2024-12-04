@@ -3,7 +3,6 @@ import { FlyControls } from './FlyControls.js';
 
 import { EffectComposer } from './postprocessing/EffectComposer.js';
 import { RenderPass } from './postprocessing/RenderPass.js';
-import { SAOPass } from './postprocessing/SAOPass.js';
 import { OutputPass } from './postprocessing/OutputPass.js';
 import { ShaderPass } from './postprocessing/ShaderPass.js';
 import { FXAAShader } from './shaders/FXAAShader.js';
@@ -51,7 +50,7 @@ function loadSettings() {
 loadSettings();
 
 const scene = new THREE.Scene();
-// scene.background = new THREE.Color(0x87CEEB);
+scene.background = new THREE.Color(0x87CEEB);
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false}); // Allow transparent background
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -80,7 +79,7 @@ const ambientLight = new THREE.AmbientLight(0x404040, 15); // Soft white light
 scene.add(ambientLight);
 
 // Add fog
-scene.fog = new THREE.FogExp2(0xffffff, 0.01); 
+scene.fog = new THREE.FogExp2(0x87CEEB, 0.01); 
 
 let frameCount = 0;
 let lastTime = performance.now();
@@ -132,23 +131,6 @@ composer.addPass(renderPass);
 
 // Add SAOPass with your parameters
 loadSettings().then(() => {
-    if (app_settings.graphics.ssao) {
-        const saoPass = new SAOPass(scene, camera);
-        composer.addPass(saoPass);
-
-        saoPass.params.saoBias = 10;
-        saoPass.params.saoIntensity = 0.015;
-        saoPass.params.saoScale = 7.5;
-        saoPass.params.saoKernelRadius = 50;
-        saoPass.params.saoMinResolution = 0;
-        saoPass.params.saoBlur = true;
-        saoPass.params.saoBlurRadius = 8;
-        saoPass.params.saoBlurStdDev = 12;
-        saoPass.params.saoBlurDepthCutoff = 0.0005;
-        saoPass.normalMaterial.side = THREE.DoubleSide;
-        saoPass.enabled = true;
-    }
-
     if (app_settings.graphics.fxaa) {
         const fxaaPass = new ShaderPass(FXAAShader);
         fxaaPass.material.uniforms['resolution'].value.set(1 / window.innerWidth, 1 / window.innerHeight);
@@ -195,51 +177,6 @@ document.addEventListener('keydown', (event) => {
 });
 
 
-//Add fog shaider
-const FogShader = {
-    uniforms: {
-        tDiffuse: { value: null }, // Вхідна текстура сцени
-        uFogColor: { value: new THREE.Color(0xcccccc) }, // Колір туману
-        uFogDensity: { value: 0.05 }, // Щільність туману
-        uCameraDepth: { value: 1.0 } // Глибина сцени (можна налаштувати)
-    },
-    vertexShader: `
-        varying vec2 vUv;
-        void main() {
-            vUv = uv;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-    `,
-    fragmentShader: `
-        uniform sampler2D tDiffuse; // Вхідна текстура сцени
-        uniform vec3 uFogColor;     // Колір туману
-        uniform float uFogDensity;  // Щільність туману
-
-        varying vec2 vUv;
-
-        void main() {
-            vec4 sceneColor = texture2D(tDiffuse, vUv);
-
-            // Отримуємо значення глибини з нормалізованого простору
-            float depth = gl_FragCoord.z / gl_FragCoord.w;
-
-            // Обчислюємо щільність туману
-            float fogFactor = exp(-uFogDensity * depth);
-            fogFactor = clamp(fogFactor, 0.0, 1.0);
-
-            // Міксуємо кольори туману та сцени
-            vec3 color = mix(uFogColor, sceneColor.rgb, fogFactor);
-
-            gl_FragColor = vec4(color, sceneColor.a);
-        }
-    `
-};
-
-const fogPass = new ShaderPass(FogShader);
-fogPass.uniforms.uFogColor.value = new THREE.Color(0xaaaaaa); // Колір туману
-fogPass.uniforms.uFogDensity.value = 0.2; // Налаштування щільності
-composer.addPass(fogPass);
-
 // Animation loop
 function animate() {
     const currentTime = performance.now();
@@ -256,35 +193,9 @@ function animate() {
 
     requestAnimationFrame(animate);
 
-    // Update day-night cycle
     updateLighting(scene, new Date());
 
-    /**
-     * Main Rendering 
-     */
-    renderer.autoClear = true;
-    renderer.autoClearDepth = true;
-    camera.layers.set(0);
-    composer.render();
-        
-    /**
-     * Transparent Objects Rendering
-     */
-
-    // Render the entire scene again to find the depth that the Composer has now lost
-    // Disable writing to the color buffer, only write to the depth buffer.
-    // Hopefully this disables the color calculation in the fragment shader. If not, use an override material.
-    // Note, this does render the entire scene geometry again...
-    renderer.getContext().colorMask(false, false, false, false);
-    renderer.render(scene, camera);
-    renderer.getContext().colorMask(true, true, true, true);
-    
-    // Render the transparent objects while accounting for the already populated depth buffer
-    camera.layers.set(1);
-    renderer.autoClear = false;
-    renderer.autoClearDepth = false;
-    renderer.render(scene, camera);
-    
+    composer.render();    
     
     controls.update(0.01);
 }

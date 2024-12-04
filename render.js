@@ -136,13 +136,11 @@ function createFlowerPlaneMaterial(flowerType) {
         texture.magFilter = THREE.NearestFilter;
         texture.generateMipmaps = true;
 
-        materials[flowerType] = new THREE.MeshBasicMaterial({
+        materials[flowerType] = new THREE.MeshStandardMaterial({
             map: texture,
             side: THREE.DoubleSide,
             transparent: true, // Ensure transparency works for flowers
             alphaTest: 0.5,
-            depthWrite: true,
-            depthTest: true
         });
     }
     return materials[flowerType];
@@ -156,7 +154,6 @@ function getOrCreateFlowerInstancedMesh(scene, flowerType) {
 
         const instancedMesh = new THREE.InstancedMesh(geometry, material, maxFlowerInstances);
         instancedMesh.count = 0; // Track number of active instances
-        instancedMesh.layers.set(1);
         flowerMeshes[flowerType] = instancedMesh;
         scene.add(instancedMesh);
     }
@@ -213,7 +210,6 @@ function renderChunk(scene, chunkX, chunkZ) {
             const geometry = new THREE.PlaneGeometry(cubeSize, cubeSize);
             instancedMesh = new THREE.InstancedMesh(geometry, material, maxInstancesPerMesh);
             instancedMesh.count = 0;
-            instancedMesh.layers.set(0);
             instancedMeshes.push(instancedMesh);
             scene.add(instancedMesh);
         }
@@ -292,7 +288,6 @@ export function renderSingleChunk(scene, chunkX, chunkZ) {
 
 export function createClouds(scene) {
     const cloudGroup = new THREE.Group();
-    cloudGroup.layers.set(1);
     const cloudCount = 64;
     const cubeSize = 1;
     const maxInstancesPerMesh = 1024;

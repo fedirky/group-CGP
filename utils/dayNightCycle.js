@@ -25,12 +25,12 @@ export function updateLighting(scene, currentTime) {
     }
 
     const fogSettings = {
-        dawn: { color: new THREE.Color(0xffc8a2), density: 0.015 },
-        morning: { color: new THREE.Color(0x87ceeb), density: 0.01 },
-        afternoon: { color: new THREE.Color(0x4682b4), density: 0.008 },
-        dusk: { color: new THREE.Color(0xffa07a), density: 0.02 },
-        evening: { color: new THREE.Color(0x6a5acd), density: 0.03 },
-        night: { color: new THREE.Color(0x191970), density: 0.04 },
+        dawn:      { color: new THREE.Color(0xffc8a2), density: 0.015 },
+        morning:   { color: new THREE.Color(0x87ceeb), density: 0.015 },
+        afternoon: { color: new THREE.Color(0x4682b4), density: 0.015 },
+        dusk:      { color: new THREE.Color(0xffa07a), density: 0.015 },
+        evening:   { color: new THREE.Color(0x6a5acd), density: 0.015 },
+        night:     { color: new THREE.Color(0x191970), density: 0.015 },
     };
 }
 
@@ -38,39 +38,49 @@ export function updateLighting(scene, currentTime) {
  * Transition functions for different times of the day.
  */
 function transitionToDawn(scene, duration) {
+    setBackground(scene, 0xffd1dc)
     setFog(scene, 0xffd1dc, 0.015, duration);
     setAmbientLight(scene, 0xffcba4, 0.5, duration);
     setDirectionalLight(scene, 0xffa500, 0.75, duration);
 }
 
 function transitionToMorning(scene, duration) {
-    setFog(scene, 0x87ceeb, 0.01, duration);
+    setBackground(scene, 0x87ceeb)
+    setFog(scene, 0x87ceeb, 0.015, duration);
     setAmbientLight(scene, 0xffffcc, 1.0, duration);
     setDirectionalLight(scene, 0xffe4b5, 1.5, duration);
 }
 
 function transitionToAfternoon(scene, duration) {
-    setFog(scene, 0x87cefa, 0.008, duration);
+    setBackground(scene, 0x87cefa)
+    setFog(scene, 0x87cefa, 0.015, duration);
     setAmbientLight(scene, 0xffffff, 1.5, duration);
     setDirectionalLight(scene, 0xffffcc, 2.0, duration);
 }
 
 function transitionToDusk(scene, duration) {
-    setFog(scene, 0xffa07a, 0.012, duration);
+    setBackground(scene, 0xffa07a)
+    setFog(scene, 0xffa07a, 0.015, duration);
     setAmbientLight(scene, 0xffd700, 0.8, duration);
     setDirectionalLight(scene, 0xff4500, 0.5, duration);
 }
 
 function transitionToEvening(scene, duration) {
-    setFog(scene, 0x2f4f4f, 0.02, duration);
+    setBackground(scene, 0x2f4f4f)
+    setFog(scene, 0x2f4f4f, 0.015, duration);
     setAmbientLight(scene, 0x708090, 0.4, duration);
     setDirectionalLight(scene, 0x191970, 0.3, duration);
 }
 
 function transitionToNight(scene, duration) {
-    setFog(scene, 0x000033, 0.025, duration);
+    setBackground(scene, 0x000033)
+    setFog(scene, 0x000033, 0.015, duration);
     setAmbientLight(scene, 0x000033, 0.2, duration);
     setDirectionalLight(scene, 0x000000, 0.1, duration);
+}
+
+function setBackground(scene, color) {
+    scene.background = new THREE.Color(color);
 }
 
 /**
