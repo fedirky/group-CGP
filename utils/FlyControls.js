@@ -1,14 +1,10 @@
-import {
-	Controls,
-	Quaternion,
-	Vector3,
-	Euler
-} from './three.r168.module.js';
+import {Controls, Quaternion, Vector3, Euler} from 'three';
+
 
 const _changeEvent = { type: 'change' };
-
 const _EPS = 0.000001;
 const _tmpQuaternion = new Quaternion();
+
 
 class FlyControls extends Controls {
 

@@ -1,14 +1,20 @@
-import * as THREE from '../three.r168.module.js';
+import * as THREE from 'three';
+
+import app_settings from "../settings.json" with { type: "json" };
+
+
+const fogDensity = Math.sqrt(-Math.log(0.000001) / Math.pow(app_settings.generation.world_size * 16, 2));
 
 let testMode = false; // Flag to enable manual testing
 let testTime = 12;    // Default test time 12PM (afternoon)
+
 
 /**
  * This updates the lighting in the scene based on the current local time or test mode.
  */
 export function updateLighting(scene, currentTime) {
     const hour = testMode ? testTime : currentTime.getHours();
-    const transitionDuration = 2000; // Duration of transition in milliseconds
+    const transitionDuration = 1; // 2000; // Duration of transition in milliseconds
 
     if (hour >= 5 && hour < 7) {
         transitionToDawn(scene, transitionDuration);
@@ -25,12 +31,12 @@ export function updateLighting(scene, currentTime) {
     }
 
     const fogSettings = {
-        dawn:      { color: new THREE.Color(0xffc8a2), density: 0.015 },
-        morning:   { color: new THREE.Color(0x87ceeb), density: 0.015 },
-        afternoon: { color: new THREE.Color(0x4682b4), density: 0.015 },
-        dusk:      { color: new THREE.Color(0xffa07a), density: 0.015 },
-        evening:   { color: new THREE.Color(0x6a5acd), density: 0.015 },
-        night:     { color: new THREE.Color(0x191970), density: 0.015 },
+        dawn:      { color: new THREE.Color(0xffc8a2), density: fogDensity },
+        morning:   { color: new THREE.Color(0x87ceeb), density: fogDensity },
+        afternoon: { color: new THREE.Color(0x4682b4), density: fogDensity },
+        dusk:      { color: new THREE.Color(0xffa07a), density: fogDensity },
+        evening:   { color: new THREE.Color(0x6a5acd), density: fogDensity },
+        night:     { color: new THREE.Color(0x191970), density: fogDensity },
     };
 }
 
@@ -39,42 +45,42 @@ export function updateLighting(scene, currentTime) {
  */
 function transitionToDawn(scene, duration) {
     setBackground(scene, 0xffd1dc)
-    setFog(scene, 0xffd1dc, 0.015, duration);
+    setFog(scene, 0xffd1dc, fogDensity, duration);
     setAmbientLight(scene, 0xffcba4, 0.5, duration);
     setDirectionalLight(scene, 0xffa500, 0.75, duration);
 }
 
 function transitionToMorning(scene, duration) {
     setBackground(scene, 0x87ceeb)
-    setFog(scene, 0x87ceeb, 0.015, duration);
+    setFog(scene, 0x87ceeb, fogDensity, duration);
     setAmbientLight(scene, 0xffffcc, 1.0, duration);
     setDirectionalLight(scene, 0xffe4b5, 1.5, duration);
 }
 
 function transitionToAfternoon(scene, duration) {
     setBackground(scene, 0x87cefa)
-    setFog(scene, 0x87cefa, 0.015, duration);
+    setFog(scene, 0x87cefa, fogDensity, duration);
     setAmbientLight(scene, 0xffffff, 1.5, duration);
     setDirectionalLight(scene, 0xffffcc, 2.0, duration);
 }
 
 function transitionToDusk(scene, duration) {
     setBackground(scene, 0xffa07a)
-    setFog(scene, 0xffa07a, 0.015, duration);
+    setFog(scene, 0xffa07a, fogDensity, duration);
     setAmbientLight(scene, 0xffd700, 0.8, duration);
     setDirectionalLight(scene, 0xff4500, 0.5, duration);
 }
 
 function transitionToEvening(scene, duration) {
     setBackground(scene, 0x2f4f4f)
-    setFog(scene, 0x2f4f4f, 0.015, duration);
+    setFog(scene, 0x2f4f4f, fogDensity, duration);
     setAmbientLight(scene, 0x708090, 0.4, duration);
     setDirectionalLight(scene, 0x191970, 0.3, duration);
 }
 
 function transitionToNight(scene, duration) {
     setBackground(scene, 0x000033)
-    setFog(scene, 0x000033, 0.015, duration);
+    setFog(scene, 0x000033, fogDensity, duration);
     setAmbientLight(scene, 0x000033, 0.2, duration);
     setDirectionalLight(scene, 0x000000, 0.1, duration);
 }
@@ -153,7 +159,7 @@ export function setTestMode(enabled, time = null) {
         //Ensure smooth transitioning as well.
         const scene = globalScene;
         if (scene) {
-            const transitionDuration = 5000;
+            const transitionDuration = 1; // 5000;
             if (testTime >= 5 && testTime < 7) {
                 transitionToDawn(scene, transitionDuration);
             } else if (testTime >= 7 && testTime < 12) {

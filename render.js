@@ -1,4 +1,5 @@
-import * as THREE from './three.r168.module.js';
+import * as THREE from 'three';
+
 import { generateLandscape } from './terrain.js';
 
 
