@@ -9,6 +9,8 @@ import { FlyControls } from './utils/FlyControls.js';
 import { FXAAShader }  from './shaders/FXAAShader.js';
 import { renderSingleChunk, createClouds } from './render.js';
 import { updateLighting, setTestMode }     from './utils/dayNightCycle.js';
+import * as WebGPURenderer from 'three/src/renderers/webgpu/WebGPURenderer.js';
+
 
 import app_settings from "./settings.json" with { type: "json" };
 

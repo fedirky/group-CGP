@@ -5,8 +5,8 @@ import app_settings from "../settings.json" with { type: "json" };
 
 const fogDensity = Math.sqrt(-Math.log(0.000001) / Math.pow(app_settings.generation.world_size * 16, 2));
 
-let testMode = false; // Flag to enable manual testing
-let testTime = 12;    // Default test time 12PM (afternoon)
+let testMode = true; // Flag to enable manual testing
+let testTime = 8;    // Default test time 12PM (afternoon)
 
 
 /**
