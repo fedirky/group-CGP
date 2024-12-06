@@ -15,8 +15,8 @@ document.body.appendChild(renderer.domElement);
 
 // Create fireflies
 const fireflies = new FireFlies(scene, {
-    groupCount: 3,
-    firefliesPerGroup: 50,
+    groupCount: 1,
+    firefliesPerGroup: 500,
     groupRadius: 5,
 });
 

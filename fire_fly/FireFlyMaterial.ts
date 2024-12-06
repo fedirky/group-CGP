@@ -62,22 +62,24 @@ export class FireFlyMaterial extends ShaderMaterial {
             uniform vec3 uColor;
             varying float vOffset;
 
-            void main() {
-                float distance = length(vUv - 0.5);
-                float glow = smoothstep(0.50, uFireFlyRadius, distance);
-                float disk = smoothstep(uFireFlyRadius, uFireFlyRadius - 0.01, distance);
+			void main() {
+				float distance = length(vUv - 0.5);
+				float glow = smoothstep(0.50, uFireFlyRadius, distance);
+				float disk = smoothstep(uFireFlyRadius, uFireFlyRadius - 0.01, distance);
 
-                // Add a flashing effect using the time uniform
-                float flash = sin(uTime * 3.0 + vOffset * 0.12) * 0.5 + 0.5; // Adjust the frequency and amplitude as desired
-                float alpha = clamp((glow + disk) * flash, 0.0, 1.0);
+				// Ефект пульсації
+				float flash = sin(uTime * 3.0 + vOffset * 0.12) * 0.5 + 0.5;
+				float alpha = clamp((glow + disk) * flash, 0.0, 1.0);
 
-                vec3 glowColor = uColor * 3. * flash;
-                vec3 fireFlyColor = uColor * 3.;
+				if (alpha < 0.10) discard; // Відкидаємо пікселі з майже нульовою альфою
 
-                vec3 finalColor = mix(glowColor, fireFlyColor, disk);
+				vec3 glowColor = uColor * 3.0 * flash;
+				vec3 fireFlyColor = uColor * 3.0;
 
-                gl_FragColor = vec4(finalColor, alpha);
-            }`
+				vec3 finalColor = mix(glowColor, fireFlyColor, disk);
+
+				gl_FragColor = vec4(finalColor, alpha);
+			}`
 		});
 	}
 

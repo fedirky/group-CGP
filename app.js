@@ -9,8 +9,8 @@ import { FlyControls } from './utils/FlyControls.js';
 import { FXAAShader }  from './shaders/FXAAShader.js';
 import { renderSingleChunk, createClouds } from './render.js';
 import { updateLighting, setTestMode }     from './utils/dayNightCycle.js';
-import * as WebGPURenderer from 'three/src/renderers/webgpu/WebGPURenderer.js';
 
+import { FireFlies } from './fire_fly/FireFly.ts';
 
 import app_settings from "./settings.json" with { type: "json" };
 
@@ -139,6 +139,12 @@ document.addEventListener('keydown', (event) => {
 });
 
 
+const fireflies = new FireFlies(scene, {
+    groupCount: 10,
+    firefliesPerGroup: 1000,
+    groupRadius: 100,
+});
+
 // Animation loop
 function animate() {
     const currentTime = performance.now();
@@ -154,6 +160,8 @@ function animate() {
     }
 
     requestAnimationFrame(animate);
+
+    fireflies.update(0.008); // Update fireflies
 
     updateLighting(scene, new Date());
 
