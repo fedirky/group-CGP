@@ -10,7 +10,8 @@ interface FireFlyMaterialOptions {
 }
 
 /**
- * FireFlyMaterial class rendering firefly particles with customizable properties.
+ * FireFlyMaterial class rendering firefly particles as square-shaped sprites
+ * with both inner and outer glow effects.
  */
 export class FireFlyMaterial extends ShaderMaterial {
 	constructor(options: FireFlyMaterialOptions = {}) {
@@ -26,58 +27,80 @@ export class FireFlyMaterial extends ShaderMaterial {
 				uFireFlyRadius: { value: uFireFlyRadius },
 				uColor: { value: uColor }
 			},
-			vertexShader: `uniform float uTime;
-            varying vec2 vUv;
-            varying float vOffset;
+			vertexShader: /* glsl */ `
+				uniform float uTime;
+				varying vec2 vUv;
+				varying float vOffset;
 
-            void main() {
-                // Apply noise to the particle motion
-                float displacementX = sin(uTime + float(gl_InstanceID) * 0.10) * 0.5;
-                float displacementY = sin(uTime + float(gl_InstanceID) * 0.15) * 0.5;
-                float displacementZ = sin(uTime + float(gl_InstanceID) * 0.13) * 0.5;
+				void main() {
+					// Apply noise to the particle motion
+					float displacementX = sin(uTime + float(gl_InstanceID) * 0.10) * 0.5;
+					float displacementY = sin(uTime + float(gl_InstanceID) * 0.15) * 0.5;
+					float displacementZ = sin(uTime + float(gl_InstanceID) * 0.13) * 0.5;
 
-                // Make the object face the camera like a pointMaterial.
-                float rotation = 0.0;
-                vec2 rotatedPosition = vec2(
-                    cos(rotation) * position.x - sin(rotation) * position.y,
-                    sin(rotation) * position.x + cos(rotation) * position.y
-                );
+					// Make the object face the camera like a pointMaterial.
+					float rotation = 0.0;
+					vec2 rotatedPosition = vec2(
+						cos(rotation) * position.x - sin(rotation) * position.y,
+						sin(rotation) * position.x + cos(rotation) * position.y
+					);
 
-                vec4 finalPosition = viewMatrix * modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
-                finalPosition.xy += rotatedPosition;
+					vec4 finalPosition = viewMatrix * modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+					finalPosition.xy += rotatedPosition;
 
-                // Make the particles move
-                finalPosition.x += displacementX;
-                finalPosition.y += displacementY;
-                finalPosition.z += displacementZ;
+					// Make the particles move
+					finalPosition.x += displacementX;
+					finalPosition.y += displacementY;
+					finalPosition.z += displacementZ;
 
-                gl_Position = projectionMatrix * finalPosition;
+					gl_Position = projectionMatrix * finalPosition;
+					vUv = uv;
+					vOffset = float(gl_InstanceID);
+				}
+			`,
+			fragmentShader: /* glsl */ `
+				varying vec2 vUv;
+				uniform float uTime;
+				uniform float uFireFlyRadius;
+				uniform vec3 uColor;
+				varying float vOffset;
 
-                vUv = uv;
-                vOffset = float(gl_InstanceID);
-            }`,
-			fragmentShader: `varying vec2 vUv;
-            uniform float uTime;
-            uniform float uFireFlyRadius;
-            uniform vec3 uColor;
-            varying float vOffset;
+				void main() {
+					// Calculate "distance" in a square shape:
+					// Instead of using Euclidean distance (length), we use the max of the x/y offsets
+					// from the center. This creates a square profile.
+					float distX = abs(vUv.x - 0.5);
+					float distY = abs(vUv.y - 0.5);
+					float squareDist = max(distX, distY);
 
-			void main() {
-				// Calculate if the fragment is inside the square area
-				vec2 center = vec2(0.5, 0.5);
-				vec2 offset = abs(vUv - center); // Absolute distance from center
-				float squareMask = step(offset.x, uFireFlyRadius * 2.0) * step(offset.y, uFireFlyRadius * 2.0);
+					// Outer glow: a subtle glow around the edge of the square
+					// We can create a gradient by using smoothstep outside the main radius.
+					float outerGlow = 1.0 - smoothstep(uFireFlyRadius, uFireFlyRadius + 0.05, squareDist);
 
-				// Pulsating effect
-				float flash = sin(uTime * 3.0 + vOffset * 0.12) * 0.5 + 0.5;
-				float alpha = squareMask * flash;
+					// Inner glow: brighter towards the center (where squareDist approaches 0.0)
+					// We create a gradient that fades as we get closer to the center.
+					float innerGlow = 1.0 - smoothstep(0.0, uFireFlyRadius - 0.02, squareDist);
 
-				if (alpha < 0.10) discard; // Discard nearly invisible pixels
+					// Combine outer and inner glow
+					float glow = max(outerGlow, innerGlow);
 
-				// Color and final output
-				vec3 finalColor = uColor * flash;
-				gl_FragColor = vec4(finalColor, alpha);
-			}`
+					// Add a flashing effect using the time uniform
+					// Adjust the frequency and amplitude as desired
+					float flash = sin(uTime * 3.0 + vOffset * 0.12) * 0.5 + 0.5;
+
+					// Final alpha
+					float alpha = clamp(glow * flash, 0.0, 1.0);
+
+					// Color adjustments
+					vec3 glowColor = uColor * 3.0 * flash;
+					vec3 fireFlyColor = uColor * 3.0;
+
+					// Blend the two colors (inner & outer glow)
+					vec3 finalColor = mix(glowColor, fireFlyColor, innerGlow);
+
+					gl_FragColor = vec4(finalColor, alpha);
+				}
+			`
 		});
 	}
 
