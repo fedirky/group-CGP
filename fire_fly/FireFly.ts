@@ -36,13 +36,15 @@ type Props = {
 	firefliesPerGroup: number; // Number of fireflies in each group
 	groupRadius: number; // Radius of each group
 	noiseTexture: Texture | null; // Optional texture for noise effects
+	groupCenters?: Vector3[]; // Optional array of group centers
 };
 
 const defaultProps = {
 	groupCount: 1,
 	firefliesPerGroup: 50,
 	groupRadius: 5,
-	noiseTexture: null
+	noiseTexture: null,
+	groupCenters: []
 };
 
 export class FireFlies {
@@ -59,6 +61,7 @@ export class FireFlies {
 	private groupCount: number; // Number of groups of fireflies
 	private firefliesPerGroup: number; // Number of fireflies in each group
 	private groupRadius: number; // Radius for grouping fireflies
+	private groupCenters: Vector3[]; // Centers of groups
 	private fireflyMaterial: FireFlyMaterial;
 
 	/**
@@ -71,6 +74,8 @@ export class FireFlies {
 		this.groupCount = props.groupCount; // Set group count
 		this.groupRadius = props.groupRadius; // Set group radius
 		this.firefliesPerGroup = props.firefliesPerGroup; // Set fireflies per group
+		this.groupCenters = props.groupCenters || Array(this.groupCount).fill(new Vector3(0, 0, 0));
+
 		if (props.noiseTexture) {
 			this.Uniforms.uNoiseTexture.value = props.noiseTexture; // Assign noise texture if provided
 		}
@@ -90,7 +95,7 @@ export class FireFlies {
 		);
 
 		// Set initial positions for the fireflies
-		this.setInitialPositions(this.groupCount, this.firefliesPerGroup);
+		this.setInitialPositions(this.groupCount, this.firefliesPerGroup, this.groupCenters);
 		this.scene.add(this.fireflyParticles); // Add fireflies to the scene
 	}
 
@@ -98,16 +103,17 @@ export class FireFlies {
 	 * Sets the initial positions of the fireflies in their groups.
 	 * @param groupCount The number of groups of fireflies.
 	 * @param firefliesPerGroup The number of fireflies in each group.
+	 * @param groupCenters Array of group centers.
 	 */
-	setInitialPositions(groupCount: number, firefliesPerGroup: number) {
+	setInitialPositions(groupCount: number, firefliesPerGroup: number, groupCenters: Vector3[]) {
 		this.fireflyParticles.instanceMatrix.setUsage(DynamicDrawUsage); // Set usage to DynamicDraw
 
 		const position = new Vector3(); // Vector to hold position
 		const matrix = new Matrix4(); // Matrix to transform each firefly
 
 		for (let i = 0; i < groupCount; i++) {
-			// Calculate a random center position for each group
-			const groupCenter = new Vector3(0, 0, 0); // Can be modified for dynamic positioning
+			// Get the center position for each group
+			const groupCenter = groupCenters[i] || new Vector3(0, 0, 0); // Default to (0, 0, 0)
 
 			// Set positions for fireflies within the group
 			for (let j = 0; j < firefliesPerGroup; j++) {

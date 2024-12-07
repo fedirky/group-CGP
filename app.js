@@ -140,9 +140,10 @@ document.addEventListener('keydown', (event) => {
 
 
 const fireflies = new FireFlies(scene, {
-    groupCount: 10,
-    firefliesPerGroup: 1000,
-    groupRadius: 100,
+    groupCount: 2,
+    firefliesPerGroup: 30,
+    groupRadius: 10,
+    groupCenters: [new THREE.Vector3(0, 25, 0)]
 });
 
 // Animation loop
