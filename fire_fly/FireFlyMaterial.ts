@@ -63,21 +63,19 @@ export class FireFlyMaterial extends ShaderMaterial {
             varying float vOffset;
 
 			void main() {
-				float distance = length(vUv - 0.5);
-				float glow = smoothstep(0.50, uFireFlyRadius, distance);
-				float disk = smoothstep(uFireFlyRadius, uFireFlyRadius - 0.01, distance);
+				// Calculate if the fragment is inside the square area
+				vec2 center = vec2(0.5, 0.5);
+				vec2 offset = abs(vUv - center); // Absolute distance from center
+				float squareMask = step(offset.x, uFireFlyRadius * 2.0) * step(offset.y, uFireFlyRadius * 2.0);
 
-				// Ефект пульсації
+				// Pulsating effect
 				float flash = sin(uTime * 3.0 + vOffset * 0.12) * 0.5 + 0.5;
-				float alpha = clamp((glow + disk) * flash, 0.0, 1.0);
+				float alpha = squareMask * flash;
 
-				if (alpha < 0.10) discard; // Відкидаємо пікселі з майже нульовою альфою
+				if (alpha < 0.10) discard; // Discard nearly invisible pixels
 
-				vec3 glowColor = uColor * 3.0 * flash;
-				vec3 fireFlyColor = uColor * 3.0;
-
-				vec3 finalColor = mix(glowColor, fireFlyColor, disk);
-
+				// Color and final output
+				vec3 finalColor = uColor * flash;
 				gl_FragColor = vec4(finalColor, alpha);
 			}`
 		});

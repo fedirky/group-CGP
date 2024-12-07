@@ -4,16 +4,27 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass }     from 'three/addons/postprocessing/RenderPass.js';
 import { OutputPass }     from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass }     from 'three/addons/postprocessing/ShaderPass.js';
+import Stats          from 'three/addons/libs/stats.module.js';
 
-import { FlyControls } from './utils/FlyControls.js';
-import { FXAAShader }  from './shaders/FXAAShader.js';
-import { renderSingleChunk, createClouds } from './render.js';
-import { updateLighting, setTestMode }     from './utils/dayNightCycle.js';
-
-import { FireFlies } from './fire_fly/FireFly.ts';
+import { FlyControls }  from './utils/FlyControls.js';
+import { FXAAShader }   from './shaders/FXAAShader.js';
+import { renderSingleChunk, 
+         createClouds } from './render.js';
+import { updateLighting, 
+         setTestMode }  from './utils/dayNightCycle.js';
+import { FireFlies }    from './fire_fly/FireFly.ts';
 
 import app_settings from "./settings.json" with { type: "json" };
 
+
+// Stats UI
+const stats = Array.from({ length: 3 }, (_, i) => {
+    const stat = new Stats();
+    stat.showPanel(i);
+    stat.domElement.style.cssText = `position:absolute;top:0px;left:${i * 80}px;`;
+    document.body.appendChild(stat.dom);
+    return stat;
+});
 
 // Scene creation
 const scene = new THREE.Scene();
@@ -47,9 +58,6 @@ scene.add(ambientLight);
 const fogDensity = Math.sqrt(-Math.log(0.000001) / Math.pow(app_settings.generation.world_size * 16, 2));
 scene.fog = new THREE.FogExp2(0x87CEEB, fogDensity); 
 
-let frameCount = 0;
-let lastTime = performance.now();
-
 // Generate chunks in a X on Z grid
 const chunkSize = 16; // Size of each chunk (optional, if you have a specific size)
 const numChunksX = app_settings.generation.world_size; // Number of chunks in the X direction
@@ -68,15 +76,6 @@ controls.movementSpeed = 20;
 controls.rollSpeed = 0.7;
 controls.autoForward = false;
 controls.dragToLook = true;
-
-const fpsCounter = document.createElement('div');
-fpsCounter.style.position = 'absolute';
-fpsCounter.style.top = '10px';
-fpsCounter.style.left = '10px';
-fpsCounter.style.color = '#000000';
-fpsCounter.style.fontSize = '16px';
-document.body.appendChild(fpsCounter);
-
 
 function countVertices() {
     let vertexCount = 0;
@@ -148,26 +147,18 @@ const fireflies = new FireFlies(scene, {
 
 // Animation loop
 function animate() {
-    const currentTime = performance.now();
-    frameCount++;
 
-    const deltaTime = currentTime - lastTime;
-    if (deltaTime >= 1000) {
-        const fps = (frameCount / (deltaTime / 1000)).toFixed(2);
-        const vertices = countVertices(); // Count vertices
-        fpsCounter.textContent = `FPS: ${Math.round(fps)}, Vertices: ${vertices}`; // Output FPS and vertex count
-        frameCount = 0;
-        lastTime = currentTime;
-    }
+    stats.forEach(stat => stat.begin());
 
     requestAnimationFrame(animate);
 
+    updateLighting(scene, new Date());
     fireflies.update(0.008); // Update fireflies
 
-    updateLighting(scene, new Date());
-
     composer.render();    
-    
+
+    stats.forEach(stat => stat.end());
+
     controls.update(0.01);
 }
 
