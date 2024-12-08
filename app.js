@@ -55,7 +55,7 @@ const ambientLight = new THREE.AmbientLight(0x404040, 15); // Soft white light
 scene.add(ambientLight);
 
 // Add fog
-const fogDensity = Math.sqrt(-Math.log(0.000001) / Math.pow(app_settings.generation.world_size * 16, 2));
+const fogDensity = Math.sqrt(-Math.log(0.0001) / Math.pow(app_settings.generation.world_size * 16, 2));
 scene.fog = new THREE.FogExp2(0x87CEEB, fogDensity); 
 
 // Generate chunks in a X on Z grid
@@ -110,8 +110,10 @@ function updateComposerSize() {
     
     renderer.setSize(width, height); // Set renderer size
     composer.setSize(width, height); // Set composer size
-
-    fxaaPass.material.uniforms['resolution'].value.set(1 / width, 1 / height);
+    
+    if (app_settings.graphics.fxaa) {
+        fxaaPass.material.uniforms['resolution'].value.set(1 / width, 1 / height);
+    }
 }
 
 // Add event handler for window resize

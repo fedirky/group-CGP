@@ -115,7 +115,7 @@ export function generateLandscape(chunkX, chunkZ) {
                         if (ran < 0.25) {
                             landscape[x][z][y].block = 'ice';
                         }
-                        else if (ran < 0.4) {
+                        else if (ran > 0.9) {
                             landscape[x][z][y + 1] = { block: 'flower_lily' };
                         }
 

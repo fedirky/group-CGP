@@ -30,7 +30,7 @@ function getBlockTexture(block, isTopFace = false) {
                 bumpPath = './textures/blocks/no_bump.png';
                 break;
             case 'ice':
-                texturePath = './textures/blocks/ice.png';
+                texturePath = './textures/blocks/ice_new.png';
                 bumpPath = './textures/blocks/no_bump.png';
                 break;
             case 'sand':
@@ -150,46 +150,51 @@ function createFlowerPlaneMaterial(flowerType) {
 
 function getOrCreateFlowerInstancedMesh(scene, flowerType) {
     if (!flowerMeshes[flowerType]) {
+        flowerMeshes[flowerType] = [];
+    }
+
+    const currentMeshes = flowerMeshes[flowerType];
+
+    // Check if we need to create a new instanced mesh
+    const lastMesh = currentMeshes[currentMeshes.length - 1];
+    if (!lastMesh || lastMesh.count >= maxFlowerInstances) {
         const geometry = new THREE.PlaneGeometry(1, 1);
         const material = createFlowerPlaneMaterial(flowerType);
 
-        const instancedMesh = new THREE.InstancedMesh(geometry, material, maxFlowerInstances);
-        instancedMesh.count = 0; // Track number of active instances
-        flowerMeshes[flowerType] = instancedMesh;
-        scene.add(instancedMesh);
+        const newMesh = new THREE.InstancedMesh(geometry, material, maxFlowerInstances);
+        newMesh.count = 0; // Track number of active instances
+        currentMeshes.push(newMesh);
+        scene.add(newMesh);
     }
-    return flowerMeshes[flowerType];
+
+    // Return the last available instanced mesh
+    return currentMeshes[currentMeshes.length - 1];
 }
 
 
 function spawnFlowerInstance(scene, posX, posY, posZ, flowerType) {
     const instancedMesh = getOrCreateFlowerInstancedMesh(scene, flowerType);
 
-    if (instancedMesh.count >= maxFlowerInstances) {
-        console.warn(`Max instances reached for ${flowerType}`);
-        return;
-    }
+    const tempMatrix = new THREE.Matrix4();
 
     if (flowerType === 'flower_lily') {
-        // Лілія: пласка, горизонтальна
-        const tempMatrix = new THREE.Matrix4();
+        // Lily: flat, horizontal
         tempMatrix.compose(
-            new THREE.Vector3(posX, posY-0.62, posZ),
-            new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)), // Лежить горизонтально
-            new THREE.Vector3(1.0, 1.0, 1.0) // Можна змінити масштаб
+            new THREE.Vector3(posX, posY - 0.62, posZ),
+            new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)), // Horizontal
+            new THREE.Vector3(1.0, 1.0, 1.0) // Adjust scale if needed
         );
 
         instancedMesh.setMatrixAt(instancedMesh.count++, tempMatrix);
     } else {
         // First flower plane
-        const tempMatrix1 = new THREE.Matrix4();
-        tempMatrix1.compose(
+        tempMatrix.compose(
             new THREE.Vector3(posX, posY, posZ),
-            new THREE.Quaternion().setFromEuler(new THREE.Euler(0, - Math.PI / 4, 0)), // No rotation
+            new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -Math.PI / 4, 0)), // No rotation
             new THREE.Vector3(1.0, 1.0, 1.0) // Adjust scale as needed
         );
 
-        instancedMesh.setMatrixAt(instancedMesh.count++, tempMatrix1);
+        instancedMesh.setMatrixAt(instancedMesh.count++, tempMatrix);
 
         // Second flower plane (rotated by 90 degrees)
         const tempMatrix2 = new THREE.Matrix4();
@@ -201,6 +206,7 @@ function spawnFlowerInstance(scene, posX, posY, posZ, flowerType) {
 
         instancedMesh.setMatrixAt(instancedMesh.count++, tempMatrix2);
     }
+
     // Mark the instanced mesh as needing an update
     instancedMesh.instanceMatrix.needsUpdate = true;
 }
