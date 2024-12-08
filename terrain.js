@@ -90,6 +90,9 @@ export function generateLandscape(chunkX, chunkZ) {
                             const flowerType = `flower_grass`;
                             landscape[x][z][y + 1] = { block: flowerType };
                         }
+                        else if (ran > 0.98){
+                            landscape[x][z][y + 1].block = 'test_glow';
+                        }
                     }
                     break; // Stop after finding the first dirt block from the top
                 }

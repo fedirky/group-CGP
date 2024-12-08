@@ -4,6 +4,8 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass }     from 'three/addons/postprocessing/RenderPass.js';
 import { OutputPass }     from 'three/addons/postprocessing/OutputPass.js';
 import { ShaderPass }     from 'three/addons/postprocessing/ShaderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
 import Stats          from 'three/addons/libs/stats.module.js';
 
 import { FlyControls }  from './utils/FlyControls.js';
@@ -92,6 +94,58 @@ const composer = new EffectComposer(renderer);
 const renderPass = new RenderPass(scene, camera);
 composer.addPass(renderPass);
 
+const bloomLayer = new THREE.Layers();
+bloomLayer.set(2);
+
+const darkMaterial = new THREE.MeshBasicMaterial({
+    color: 'black',
+    side: THREE.DoubleSide, // Двосторонній матеріал
+    transparent: true,      // Увімкнути прозорість
+    opacity: 1.0            // Початкова непрозорість
+});
+
+const materials = {}; // Збереження оригінальних матеріалів
+
+function darkenNonBloomed(obj) {
+    if (obj.isMesh && bloomLayer.test(obj.layers) === false) {
+        // Зберегти оригінальний матеріал
+        materials[obj.uuid] = obj.material;
+
+        // Якщо матеріал має прозорість або текстуру
+        if (obj.material.transparent || obj.material.opacity < 1.0) {
+            darkMaterial.opacity = obj.material.opacity; // Зберегти прозорість оригінального матеріалу
+            darkMaterial.map = obj.material.map;         // Використовувати текстуру, якщо вона є
+        } else {
+            darkMaterial.opacity = 1.0; // Зробити повністю непрозорим
+            darkMaterial.map = null;   // Не використовувати текстуру
+        }
+
+        // Замінити матеріал на затемнений
+        obj.material = darkMaterial;
+    }
+}
+
+function restoreMaterial(obj) {
+    if (materials[obj.uuid]) {
+        obj.material = materials[obj.uuid]; // Відновити оригінальний матеріал
+        delete materials[obj.uuid];        // Видалити збережений матеріал
+    }
+}
+
+const params = {
+    bloomStrength: 5.5,
+    bloomThreshold: 5.0,
+    bloomRadius: 0.5,
+};
+
+const bloomPass = new UnrealBloomPass(
+    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    params.bloomStrength,
+    params.bloomRadius,
+    params.bloomThreshold
+);
+composer.addPass(bloomPass);
+
 // Add FXAAPass with your parameters
 if (app_settings.graphics.fxaa) {
     const fxaaPass = new ShaderPass(FXAAShader);
@@ -148,7 +202,7 @@ const fireflies = new FireFlies(scene, {
 });
 
 // Animation loop
-function animate() {
+/*function animate() {
 
     stats.forEach(stat => stat.begin());
 
@@ -162,6 +216,30 @@ function animate() {
     stats.forEach(stat => stat.end());
 
     controls.update(0.01);
+}*/
+
+function animate() {
+
+    stats.forEach(stat => stat.begin());
+
+    requestAnimationFrame(animate);
+
+    updateLighting(scene, new Date());
+    fireflies.update(0.008); // Update fireflies
+
+    // Затемнити всі об'єкти, які не належать до шару блуму
+    scene.traverse(darkenNonBloomed);
+
+    // Рендеринг з блумом
+    composer.render();
+
+    // Відновити оригінальні матеріали
+    scene.traverse(restoreMaterial);
+
+    stats.forEach(stat => stat.end());
+
+    controls.update(0.01);
 }
+
 
 animate();

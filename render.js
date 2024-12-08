@@ -41,6 +41,10 @@ function getBlockTexture(block, isTopFace = false) {
                 texturePath = './textures/blocks/stone.png';
                 bumpPath = './textures/blocks/stone_bump.png';
                 break;
+            case 'test_glow':
+                texturePath = './textures/blocks/test_glow.png';
+                bumpPath = './textures/blocks/no_bump.png';
+                break;
         }
     }
 
@@ -61,7 +65,8 @@ function getBlockTexture(block, isTopFace = false) {
         texture.minFilter = THREE.NearestFilter; // Вимикаємо міпмапи
         texture.magFilter = THREE.NearestFilter;
         texture.generateMipmaps = false; // Вимикаємо генерацію міпмапів
-    } else {
+    } 
+    else {
         texture = textureLoader.load(texturePath);
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.minFilter = THREE.LinearMipmapNearestFilter;
@@ -105,6 +110,16 @@ function getBlockMaterial(block, isTopFace = false) {
                 depthWrite: true,
             };
             materials[textureKey] = new THREE.MeshPhongMaterial(materialConfig);
+        } else if (block === 'test_glow') {
+            materialConfig = {
+                map: map,
+                bumpMap: bumpMap,
+                bumpScale: globalBumpScale,
+                side: THREE.DoubleSide,
+                color: new THREE.Color(0xe6f7ff),
+                depthWrite: true,
+            };
+            materials[textureKey] = new THREE.MeshLambertMaterial(materialConfig)
         } else if (block === 'water') {
             // Special case for water (transparency and material settings)
             Object.assign(materialConfig, {
@@ -228,6 +243,8 @@ function renderChunk(scene, chunkX, chunkZ) {
             const geometry = new THREE.PlaneGeometry(cubeSize, cubeSize);
             instancedMesh = new THREE.InstancedMesh(geometry, material, maxInstancesPerMesh);
             instancedMesh.count = 0;
+            if (block === 'test_glow')
+                instancedMesh.layers.enable(2);
             instancedMeshes.push(instancedMesh);
             scene.add(instancedMesh);
         }
