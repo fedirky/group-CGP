@@ -30,7 +30,7 @@ function getBlockTexture(block, isTopFace = false) {
                 bumpPath = './textures/blocks/no_bump.png';
                 break;
             case 'ice':
-                texturePath = './textures/blocks/ice_new.png';
+                texturePath = './textures/blocks/ice.png';
                 bumpPath = './textures/blocks/no_bump.png';
                 break;
             case 'sand':
@@ -119,7 +119,7 @@ function getBlockMaterial(block, isTopFace = false) {
                 color: new THREE.Color(0xe6f7ff),
                 depthWrite: true,
             };
-            materials[textureKey] = new THREE.MeshLambertMaterial(materialConfig)
+            materials[textureKey] = new THREE.MeshBasicMaterial(materialConfig)
         } else if (block === 'water') {
             // Special case for water (transparency and material settings)
             Object.assign(materialConfig, {
@@ -390,11 +390,11 @@ export function createClouds(scene) {
                     // Check for instanced mesh capacity
                     if (!instancedMesh || instancedMesh.count >= maxInstancesPerMesh - 6) {
                         const geometry = new THREE.PlaneGeometry(cubeSize, cubeSize);
-                        const material = new THREE.MeshBasicMaterial({
+                        const material = new THREE.MeshLambertMaterial({
                             color: 0xffffff,
-                            transparent: true,
-                            opacity: 0.7,
-                            depthWrite: false,
+                            transparent: false,
+                            opacity: 0.8,
+                            depthWrite: true,
                             side: THREE.DoubleSide
                         });
                         instancedMesh = new THREE.InstancedMesh(geometry, material, maxInstancesPerMesh);
