@@ -81,8 +81,13 @@ export function generateLandscape(chunkX, chunkZ) {
                         landscape[x][z][y].block = 'grass';
 
                         // With a 2.5% probability, add a random flower above grass
-                        if (Math.random() < 0.025) {
+                        var ran = Math.random()
+                        if (ran < 0.025) {
                             const flowerType = `flower_${Math.floor(Math.random() * 7) + 1}`;
+                            landscape[x][z][y + 1] = { block: flowerType };
+                        }
+                        else if (ran < 0.5){
+                            const flowerType = `flower_grass`;
                             landscape[x][z][y + 1] = { block: flowerType };
                         }
                     }
@@ -106,9 +111,14 @@ export function generateLandscape(chunkX, chunkZ) {
                     // If it's the topmost block or the block above is air
                     if (y === maxHeight - 1 || landscape[x][z][y + 1].block === 'air') {
                         // With a probability of 25%, turn it into ice
-                        if (Math.random() < 0.25) {
+                        var ran = Math.random()
+                        if (ran < 0.25) {
                             landscape[x][z][y].block = 'ice';
                         }
+                        else if (ran < 0.4) {
+                            landscape[x][z][y + 1] = { block: 'flower_lily' };
+                        }
+
                     }
                     break; // Stop after processing the topmost water block
                 }

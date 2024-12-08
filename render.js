@@ -109,7 +109,7 @@ function getBlockMaterial(block, isTopFace = false) {
             // Special case for water (transparency and material settings)
             Object.assign(materialConfig, {
                 transparent: true,
-                opacity: 0.75,
+                opacity: 1.0,
                 depthWrite: true,
             });
             materials[textureKey] = new THREE.MeshLambertMaterial(materialConfig);
@@ -170,26 +170,37 @@ function spawnFlowerInstance(scene, posX, posY, posZ, flowerType) {
         return;
     }
 
-    // First flower plane
-    const tempMatrix1 = new THREE.Matrix4();
-    tempMatrix1.compose(
-        new THREE.Vector3(posX, posY, posZ),
-        new THREE.Quaternion().setFromEuler(new THREE.Euler(0, - Math.PI / 4, 0)), // No rotation
-        new THREE.Vector3(1.0, 1.0, 1.0) // Adjust scale as needed
-    );
+    if (flowerType === 'flower_lily') {
+        // Лілія: пласка, горизонтальна
+        const tempMatrix = new THREE.Matrix4();
+        tempMatrix.compose(
+            new THREE.Vector3(posX, posY-0.62, posZ),
+            new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)), // Лежить горизонтально
+            new THREE.Vector3(1.0, 1.0, 1.0) // Можна змінити масштаб
+        );
 
-    instancedMesh.setMatrixAt(instancedMesh.count++, tempMatrix1);
+        instancedMesh.setMatrixAt(instancedMesh.count++, tempMatrix);
+    } else {
+        // First flower plane
+        const tempMatrix1 = new THREE.Matrix4();
+        tempMatrix1.compose(
+            new THREE.Vector3(posX, posY, posZ),
+            new THREE.Quaternion().setFromEuler(new THREE.Euler(0, - Math.PI / 4, 0)), // No rotation
+            new THREE.Vector3(1.0, 1.0, 1.0) // Adjust scale as needed
+        );
 
-    // Second flower plane (rotated by 90 degrees)
-    const tempMatrix2 = new THREE.Matrix4();
-    tempMatrix2.compose(
-        new THREE.Vector3(posX, posY, posZ),
-        new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI / 4, 0)), // 90 degree rotation
-        new THREE.Vector3(1.0, 1.0, 1.0) // Adjust scale as needed
-    );
+        instancedMesh.setMatrixAt(instancedMesh.count++, tempMatrix1);
 
-    instancedMesh.setMatrixAt(instancedMesh.count++, tempMatrix2);
+        // Second flower plane (rotated by 90 degrees)
+        const tempMatrix2 = new THREE.Matrix4();
+        tempMatrix2.compose(
+            new THREE.Vector3(posX, posY, posZ),
+            new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI / 4, 0)), // 90 degree rotation
+            new THREE.Vector3(1.0, 1.0, 1.0) // Adjust scale as needed
+        );
 
+        instancedMesh.setMatrixAt(instancedMesh.count++, tempMatrix2);
+    }
     // Mark the instanced mesh as needing an update
     instancedMesh.instanceMatrix.needsUpdate = true;
 }
