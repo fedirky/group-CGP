@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 
-import { generateLandscape } from './terrain.js';
+import app_settings from "../settings.json" with { type: "json" };
 
+import { getChunk } from './terrain_generator.js';
+
+
+const numChunksX = app_settings.generation.world_size;
+const numChunksZ = app_settings.generation.world_size;
 
 const textureLoader = new THREE.TextureLoader();
 const materials = {};
@@ -42,7 +47,7 @@ function getBlockTexture(block, isTopFace = false) {
                 bumpPath = './textures/blocks/stone_bump.png';
                 break;
             case 'test_glow':
-                texturePath = './textures/blocks/test_glow.png';
+                texturePath = './textures/blocks/glowberries.png';
                 bumpPath = './textures/blocks/no_bump.png';
                 break;
         }
@@ -110,16 +115,6 @@ function getBlockMaterial(block, isTopFace = false) {
                 depthWrite: true,
             };
             materials[textureKey] = new THREE.MeshPhongMaterial(materialConfig);
-        } else if (block === 'test_glow') {
-            materialConfig = {
-                map: map,
-                bumpMap: bumpMap,
-                bumpScale: globalBumpScale,
-                side: THREE.DoubleSide,
-                color: new THREE.Color(0xe6f7ff),
-                depthWrite: true,
-            };
-            materials[textureKey] = new THREE.MeshBasicMaterial(materialConfig)
         } else if (block === 'water') {
             // Special case for water (transparency and material settings)
             Object.assign(materialConfig, {
@@ -158,6 +153,26 @@ function createFlowerPlaneMaterial(flowerType) {
             transparent: true, // Ensure transparency works for flowers
             alphaTest: 0.5,
         });
+
+        if (flowerType == "flower_glowberries") {
+
+            const emissive_texture = textureLoader.load(`./textures/flowers/${flowerType}_emissive.png`);
+            emissive_texture.colorSpace = THREE.SRGBColorSpace;
+            emissive_texture.minFilter = THREE.LinearMipmapNearestFilter;
+            emissive_texture.magFilter = THREE.NearestFilter;
+            emissive_texture.generateMipmaps = true;
+
+            materials[flowerType] = new THREE.MeshStandardMaterial({
+                map: texture,
+                side: THREE.DoubleSide,
+                transparent: true, // Ensure transparency works for flowers
+                alphaTest: 0.5,
+                emissiveMap: emissive_texture,
+                emissive: new THREE.Color(0xEA8931),
+                emissiveIntensity: 0.75,
+            });
+
+        }
     }
     return materials[flowerType];
 }
@@ -167,7 +182,7 @@ function getOrCreateFlowerInstancedMesh(scene, flowerType) {
     if (!flowerMeshes[flowerType]) {
         flowerMeshes[flowerType] = [];
     }
-
+    
     const currentMeshes = flowerMeshes[flowerType];
 
     // Check if we need to create a new instanced mesh
@@ -177,6 +192,11 @@ function getOrCreateFlowerInstancedMesh(scene, flowerType) {
         const material = createFlowerPlaneMaterial(flowerType);
 
         const newMesh = new THREE.InstancedMesh(geometry, material, maxFlowerInstances);
+
+        if (flowerType === 'flower_glowberries') {
+            newMesh.layers.enable(2);
+        }
+
         newMesh.count = 0; // Track number of active instances
         currentMeshes.push(newMesh);
         scene.add(newMesh);
@@ -194,31 +214,41 @@ function spawnFlowerInstance(scene, posX, posY, posZ, flowerType) {
 
     if (flowerType === 'flower_lily') {
         // Lily: flat, horizontal
+        const rotationZ = (Math.floor(Math.random() * 3) + 1) * Math.PI / 2; // Multiply by 90 degrees (Math.PI / 2)
+
         tempMatrix.compose(
             new THREE.Vector3(posX, posY - 0.62, posZ),
-            new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)), // Horizontal
+            new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, rotationZ)), // Random Y rotation
             new THREE.Vector3(1.0, 1.0, 1.0) // Adjust scale if needed
         );
 
         instancedMesh.setMatrixAt(instancedMesh.count++, tempMatrix);
     } else {
-        // First flower plane
+        // Random shift for X and Y coordinates
+        var randomShiftX = (Math.floor(Math.random() * 3) - 1) / 16; // Generates -1/16, 0, or 1/16
+        var randomShiftY = (Math.floor(Math.random() * 3) - 1) / 16; // Generates -1/16, 0, or 1/16
+        
+        // TODO Implement this properly
+        if (flowerType === 'flower_sugar_cane') {
+            randomShiftX = 0;
+            randomShiftY = 0;
+        }
+    
+        // First flower plane with random shift
         tempMatrix.compose(
-            new THREE.Vector3(posX, posY, posZ),
+            new THREE.Vector3(posX + randomShiftX, posY, posZ + randomShiftY), // Apply random shift
             new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -Math.PI / 4, 0)), // No rotation
             new THREE.Vector3(1.0, 1.0, 1.0) // Adjust scale as needed
         );
-
         instancedMesh.setMatrixAt(instancedMesh.count++, tempMatrix);
-
-        // Second flower plane (rotated by 90 degrees)
+    
+        // Second flower plane (rotated by 90 degrees) with random shift
         const tempMatrix2 = new THREE.Matrix4();
         tempMatrix2.compose(
-            new THREE.Vector3(posX, posY, posZ),
+            new THREE.Vector3(posX + randomShiftX, posY, posZ + randomShiftY), // Apply random shift
             new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI / 4, 0)), // 90 degree rotation
             new THREE.Vector3(1.0, 1.0, 1.0) // Adjust scale as needed
         );
-
         instancedMesh.setMatrixAt(instancedMesh.count++, tempMatrix2);
     }
 
@@ -229,7 +259,7 @@ function spawnFlowerInstance(scene, posX, posY, posZ, flowerType) {
 
 function renderChunk(scene, chunkX, chunkZ) {
     const cubeSize = 1;
-    const landscape = generateLandscape(chunkX, chunkZ);
+    const chunkData = getChunk(chunkX, chunkZ);
     const maxInstancesPerMesh = 1024;
     const tempMatrix = new THREE.Matrix4();
 
@@ -243,8 +273,6 @@ function renderChunk(scene, chunkX, chunkZ) {
             const geometry = new THREE.PlaneGeometry(cubeSize, cubeSize);
             instancedMesh = new THREE.InstancedMesh(geometry, material, maxInstancesPerMesh);
             instancedMesh.count = 0;
-            if (block === 'test_glow')
-                instancedMesh.layers.enable(2);
             instancedMeshes.push(instancedMesh);
             scene.add(instancedMesh);
         }
@@ -261,15 +289,15 @@ function renderChunk(scene, chunkX, chunkZ) {
         instancedMesh.setMatrixAt(instancedMesh.count++, tempMatrix);
     };
 
-    landscape.forEach((column, x) => {
+    chunkData.forEach((column, x) => {
         column.forEach((row, z) => {
             row.forEach((blockData, y) => {
                 const block = blockData.block;
                 if (!block || block === 'air') return;
 
-                const posX = chunkX + x;
+                const posX = chunkX * 16 + x;
                 const posY = y;
-                const posZ = chunkZ + z;
+                const posZ = chunkZ * 16 + z;
 
                 if (block.startsWith('flower_')) {
                     spawnFlowerInstance(scene, posX, posY, posZ, block);
@@ -277,32 +305,69 @@ function renderChunk(scene, chunkX, chunkZ) {
                 }
 
                 const neighbors = [
-                    { offset: [-1, 0, 0], rotation: [0, Math.PI / 2, 0], isTopFace: false },
-                    { offset: [1, 0, 0], rotation: [0, -Math.PI / 2, 0], isTopFace: false },
-                    { offset: [0, -1, 0], rotation: [Math.PI / 2, 0, 0], isTopFace: false },
-                    { offset: [0, 1, 0], rotation: [-Math.PI / 2, 0, 0], isTopFace: true },
-                    { offset: [0, 0, -1], rotation: [0, 0, 0], isTopFace: false },
-                    { offset: [0, 0, 1], rotation: [0, Math.PI, 0], isTopFace: false },
+                    { offset: [-1, 0, 0], rotation: [0, Math.PI / 2, 0], isTopFace: false, direction: 'left' },
+                    { offset: [1, 0, 0], rotation: [0, -Math.PI / 2, 0], isTopFace: false, direction: 'right' },
+                    { offset: [0, -1, 0], rotation: [Math.PI / 2, 0, 0], isTopFace: false, direction: 'down' },
+                    { offset: [0, 1, 0], rotation: [-Math.PI / 2, 0, 0], isTopFace: true, direction: 'up' },
+                    { offset: [0, 0, -1], rotation: [0, 0, 0], isTopFace: false, direction: 'back' },
+                    { offset: [0, 0, 1], rotation: [0, Math.PI, 0], isTopFace: false, direction: 'front' },
                 ];
 
-                neighbors.forEach(({ offset, rotation, isTopFace }) => {
-                    const [nx, ny, nz] = [x + offset[0], y + offset[1], z + offset[2]];
+                // Only check sides (borders) of the chunk
+                const isEdgeBlock = x === 0 || x === chunkData.length - 1 || z === 0 || z === chunkData[0].length - 1;
 
-                    const neighborBlock =
-                        nx < 0 || nx >= landscape.length ||
-                        nz < 0 || nz >= landscape[0].length ||
-                        ny < 0 || ny >= landscape[0][0].length
-                            ? 'air'
-                            : landscape[nx]?.[nz]?.[ny]?.block;
+                if (isEdgeBlock) {
+                    neighbors.forEach(({ offset, rotation, isTopFace, direction }) => {
+                        const [nx, ny, nz] = [x + offset[0], y + offset[1], z + offset[2]];
 
-                    const isExposed = neighborBlock === 'air' || neighborBlock.startsWith('flower_');
+                        // Check if the neighboring block is within the current chunk
+                        const neighborBlock =
+                            nx < 0 || nx >= chunkData.length ||
+                            nz < 0 || nz >= chunkData[0].length ||
+                            ny < 0 || ny >= chunkData[0][0].length
+                                ? 'air'
+                                : chunkData[nx]?.[nz]?.[ny]?.block;
 
-                    if (block === 'water' && isTopFace && isExposed) {
-                        renderFace(block, posX, posY - cubeSize / 8, posZ, offset, rotation, true);
-                    } else if (block !== 'water' && (isExposed || neighborBlock === 'water')) {
-                        renderFace(block, posX, posY, posZ, offset, rotation, isTopFace);
-                    }
-                });
+                        // If at the edge of the chunk, check the aligned chunk
+                        const neighborChunkX = direction === 'left' || direction === 'right' ? chunkX + (direction === 'left' ? -1 : 1) : chunkX;
+                        const neighborChunkZ = direction === 'back' || direction === 'front' ? chunkZ + (direction === 'back' ? -1 : 1) : chunkZ;
+                        const alignedChunkData = getChunk(neighborChunkX, neighborChunkZ);
+                        
+                        // Safe check to ensure the neighbor in the aligned chunk exists before accessing the block
+                        const alignedBlock = alignedChunkData && alignedChunkData[nx] && alignedChunkData[nx][nz] && alignedChunkData[nx][nz][ny] ? alignedChunkData[nx][nz][ny].block : 'air';
+
+                        // If the adjacent chunk has a block, don't render the side face
+                        const isExposed = (neighborBlock === 'air' || neighborBlock.startsWith('flower_')) && (alignedBlock === 'air' || alignedBlock.startsWith('flower_'));
+
+                        
+                        // Render the face only if it's exposed
+                        if (block === 'water' && isTopFace && isExposed) {
+                            renderFace(block, posX, posY - cubeSize / 8, posZ, offset, rotation, true);
+                        } else if (block !== 'water' && (isExposed || neighborBlock === 'water' || alignedBlock === 'water')) {
+                            renderFace(block, posX, posY, posZ, offset, rotation, isTopFace);
+                        }
+                    });
+                } else {
+                    // For non-edge blocks, just render the faces normally without neighbor checks
+                    neighbors.forEach(({ offset, rotation, isTopFace }) => {
+                        const [nx, ny, nz] = [x + offset[0], y + offset[1], z + offset[2]];
+
+                        const neighborBlock =
+                            nx < 0 || nx >= chunkData.length ||
+                            nz < 0 || nz >= chunkData[0].length ||
+                            ny < 0 || ny >= chunkData[0][0].length
+                                ? 'air'
+                                : chunkData[nx]?.[nz]?.[ny]?.block;
+
+                        const isExposed = neighborBlock === 'air' || neighborBlock.startsWith('flower_');
+
+                        if (block === 'water' && isTopFace && isExposed) {
+                            renderFace(block, posX, posY - cubeSize / 8, posZ, offset, rotation, true);
+                        } else if (block !== 'water' && (isExposed || neighborBlock === 'water')) {
+                            renderFace(block, posX, posY, posZ, offset, rotation, isTopFace);
+                        }
+                    });
+                }
             });
         });
     });
@@ -316,12 +381,17 @@ function renderChunk(scene, chunkX, chunkZ) {
 }
 
 
-export function renderSingleChunk(scene, chunkX, chunkZ) {
-    renderChunk(scene, chunkX, chunkZ);
+
+export function renderTerrain(scene) {
+    for (let i = -Math.round(numChunksX/2); i < Math.round(numChunksX/2); i++) {
+        for (let j = -Math.round(numChunksZ/2); j < Math.round(numChunksZ/2); j++) {
+            renderChunk(scene, i, j);
+        }
+    };
 }
 
 
-export function createClouds(scene) {
+export function renderClouds(scene) {
     const cloudGroup = new THREE.Group();
     const cloudCount = 64;
     const cubeSize = 1;

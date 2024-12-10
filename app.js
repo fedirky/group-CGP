@@ -13,8 +13,8 @@ import Stats          from 'three/addons/libs/stats.module.js';
 
 import { FlyControls }  from './utils/FlyControls.js';
 import { FXAAShader }   from './shaders/FXAAShader.js';
-import { renderSingleChunk, 
-         createClouds } from './render.js';
+import { renderTerrain, 
+         renderClouds } from './terrain/terrain_renderer.js';
 import { updateLighting, 
          setTestMode }  from './utils/dayNightCycle.js';
 import { FireFlies }    from './fire_fly/FireFly.ts';
@@ -63,18 +63,8 @@ scene.add(ambientLight);
 const fogDensity = Math.sqrt(-Math.log(0.0001) / Math.pow(app_settings.generation.world_size * 16, 2));
 scene.fog = new THREE.FogExp2(0x87CEEB, fogDensity); 
 
-// Generate chunks in a X on Z grid
-const chunkSize = 16; // Size of each chunk (optional, if you have a specific size)
-const numChunksX = app_settings.generation.world_size; // Number of chunks in the X direction
-const numChunksZ = app_settings.generation.world_size; // Number of chunks in the Z direction
-
-for (let i = -Math.round(numChunksX/2); i < Math.round(numChunksX/2); i++) {
-    for (let j = -Math.round(numChunksZ/2); j < Math.round(numChunksZ/2); j++) {
-        renderSingleChunk(scene, i * chunkSize, j * chunkSize);
-    }
-};
-
-createClouds(scene);
+renderTerrain(scene);
+renderClouds(scene);
 
 const controls = new FlyControls(camera, renderer.domElement);
 controls.movementSpeed = 20;
@@ -99,14 +89,14 @@ composer.addPass(renderPass);
 
 // Налаштування SelectiveBloomEffect для об'єктів на шарі 2
 const effect = new SelectiveBloomEffect(scene, camera, {
-    blendFunction: BlendFunction.ADD,
+    blendFunction: BlendFunction.SCREEN,
     mipmapBlur: true,
-    luminanceThreshold: 0.007,
-    luminanceSmoothing: 0.1,
-    intensity: 0.50
+    luminanceThreshold: 0.001,
+    luminanceSmoothing: 0.025,
+    intensity: 2.5,
+    radius: 1.0,
 });
 
-effect.mipmapBlurPass.radius = 0.5;
 
 // Додати до вибору для світіння тільки об'єкти на шарі 2
 scene.traverse((child) => {
@@ -175,7 +165,7 @@ const fireflies = new FireFlies(scene, {
 
 // Animation loop
 function animate() {
-
+    
     stats.forEach(stat => stat.begin());
 
     requestAnimationFrame(animate);
