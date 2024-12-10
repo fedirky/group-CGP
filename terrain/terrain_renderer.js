@@ -259,6 +259,8 @@ function spawnFlowerInstance(scene, posX, posY, posZ, flowerType) {
 
 function renderChunk(scene, chunkX, chunkZ) {
     const cubeSize = 1;
+    const CHUNK_SIZE = 16; // Розмір чанку. Має співпадати з тим, що використовується в getChunk
+
     const chunkData = getChunk(chunkX, chunkZ);
     const maxInstancesPerMesh = 1024;
     const tempMatrix = new THREE.Matrix4();
@@ -295,9 +297,9 @@ function renderChunk(scene, chunkX, chunkZ) {
                 const block = blockData.block;
                 if (!block || block === 'air') return;
 
-                const posX = chunkX * 16 + x;
+                const posX = chunkX * CHUNK_SIZE + x;
                 const posY = y;
-                const posZ = chunkZ * 16 + z;
+                const posZ = chunkZ * CHUNK_SIZE + z;
 
                 if (block.startsWith('flower_')) {
                     spawnFlowerInstance(scene, posX, posY, posZ, block);
@@ -305,42 +307,70 @@ function renderChunk(scene, chunkX, chunkZ) {
                 }
 
                 const neighbors = [
-                    { offset: [-1, 0, 0], rotation: [0, Math.PI / 2, 0], isTopFace: false, direction: 'left' },
-                    { offset: [1, 0, 0], rotation: [0, -Math.PI / 2, 0], isTopFace: false, direction: 'right' },
+                    { offset: [-1, 0, 0], rotation: [0, Math.PI / 2, 0],  isTopFace: false, direction: 'left' },
+                    { offset: [1, 0, 0],  rotation: [0, -Math.PI / 2, 0], isTopFace: false, direction: 'right' },
                     { offset: [0, -1, 0], rotation: [Math.PI / 2, 0, 0], isTopFace: false, direction: 'down' },
-                    { offset: [0, 1, 0], rotation: [-Math.PI / 2, 0, 0], isTopFace: true, direction: 'up' },
-                    { offset: [0, 0, -1], rotation: [0, 0, 0], isTopFace: false, direction: 'back' },
-                    { offset: [0, 0, 1], rotation: [0, Math.PI, 0], isTopFace: false, direction: 'front' },
+                    { offset: [0, 1, 0],  rotation: [-Math.PI / 2, 0, 0],isTopFace: true,  direction: 'up' },
+                    { offset: [0, 0, -1], rotation: [0, 0, 0],          isTopFace: false, direction: 'back' },
+                    { offset: [0, 0, 1],  rotation: [0, Math.PI, 0],    isTopFace: false, direction: 'front' },
                 ];
 
-                // Only check sides (borders) of the chunk
-                const isEdgeBlock = x === 0 || x === chunkData.length - 1 || z === 0 || z === chunkData[0].length - 1;
+                const isEdgeBlock = x === 0 || x === CHUNK_SIZE - 1 || z === 0 || z === CHUNK_SIZE - 1;
 
                 if (isEdgeBlock) {
+                    // Якщо блок на краю чанку - перевіряємо сусідні чанки
                     neighbors.forEach(({ offset, rotation, isTopFace, direction }) => {
-                        const [nx, ny, nz] = [x + offset[0], y + offset[1], z + offset[2]];
+                        let [nx, ny, nz] = [x + offset[0], y + offset[1], z + offset[2]];
 
-                        // Check if the neighboring block is within the current chunk
-                        const neighborBlock =
-                            nx < 0 || nx >= chunkData.length ||
-                            nz < 0 || nz >= chunkData[0].length ||
-                            ny < 0 || ny >= chunkData[0][0].length
-                                ? 'air'
-                                : chunkData[nx]?.[nz]?.[ny]?.block;
+                        // Отримуємо сусідній блок в поточному чанку (якщо в межах)
+                        let neighborBlock = 'air';
+                        if (
+                            nx >= 0 && nx < CHUNK_SIZE &&
+                            nz >= 0 && nz < CHUNK_SIZE &&
+                            ny >= 0 && ny < chunkData[0][0].length
+                        ) {
+                            neighborBlock = chunkData[nx][nz][ny].block;
+                        }
 
-                        // If at the edge of the chunk, check the aligned chunk
-                        const neighborChunkX = direction === 'left' || direction === 'right' ? chunkX + (direction === 'left' ? -1 : 1) : chunkX;
-                        const neighborChunkZ = direction === 'back' || direction === 'front' ? chunkZ + (direction === 'back' ? -1 : 1) : chunkZ;
+                        // Обчислюємо координати та чанк сусіда
+                        let neighborChunkX = chunkX;
+                        let neighborChunkZ = chunkZ;
+                        let nxAligned = nx;
+                        let nzAligned = nz;
+
+                        // Коригування індексів для сусідніх чанків
+                        if (direction === 'left' && nx < 0) {
+                            neighborChunkX = chunkX - 1;
+                            nxAligned = CHUNK_SIZE - 1;
+                        } else if (direction === 'right' && nx >= CHUNK_SIZE) {
+                            neighborChunkX = chunkX + 1;
+                            nxAligned = 0;
+                        }
+
+                        if (direction === 'back' && nz < 0) {
+                            neighborChunkZ = chunkZ - 1;
+                            nzAligned = CHUNK_SIZE - 1;
+                        } else if (direction === 'front' && nz >= CHUNK_SIZE) {
+                            neighborChunkZ = chunkZ + 1;
+                            nzAligned = 0;
+                        }
+
                         const alignedChunkData = getChunk(neighborChunkX, neighborChunkZ);
-                        
-                        // Safe check to ensure the neighbor in the aligned chunk exists before accessing the block
-                        const alignedBlock = alignedChunkData && alignedChunkData[nx] && alignedChunkData[nx][nz] && alignedChunkData[nx][nz][ny] ? alignedChunkData[nx][nz][ny].block : 'air';
+                        let alignedBlock = 'air';
 
-                        // If the adjacent chunk has a block, don't render the side face
-                        const isExposed = (neighborBlock === 'air' || neighborBlock.startsWith('flower_')) && (alignedBlock === 'air' || alignedBlock.startsWith('flower_'));
+                        if (
+                            alignedChunkData &&
+                            nxAligned >= 0 && nxAligned < CHUNK_SIZE &&
+                            nzAligned >= 0 && nzAligned < CHUNK_SIZE &&
+                            ny >= 0 && ny < alignedChunkData[0][0].length
+                        ) {
+                            alignedBlock = alignedChunkData[nxAligned][nzAligned][ny].block;
+                        }
 
-                        
-                        // Render the face only if it's exposed
+                        // Визначаємо, чи грань відкрита
+                        const isExposed = (neighborBlock === 'air' || neighborBlock.startsWith('flower_')) &&
+                                          (alignedBlock === 'air' || alignedBlock.startsWith('flower_'));
+
                         if (block === 'water' && isTopFace && isExposed) {
                             renderFace(block, posX, posY - cubeSize / 8, posZ, offset, rotation, true);
                         } else if (block !== 'water' && (isExposed || neighborBlock === 'water' || alignedBlock === 'water')) {
@@ -348,16 +378,16 @@ function renderChunk(scene, chunkX, chunkZ) {
                         }
                     });
                 } else {
-                    // For non-edge blocks, just render the faces normally without neighbor checks
+                    // Для не крайових блоків використовуємо стару логіку
                     neighbors.forEach(({ offset, rotation, isTopFace }) => {
                         const [nx, ny, nz] = [x + offset[0], y + offset[1], z + offset[2]];
 
                         const neighborBlock =
-                            nx < 0 || nx >= chunkData.length ||
-                            nz < 0 || nz >= chunkData[0].length ||
+                            nx < 0 || nx >= CHUNK_SIZE ||
+                            nz < 0 || nz >= CHUNK_SIZE ||
                             ny < 0 || ny >= chunkData[0][0].length
                                 ? 'air'
-                                : chunkData[nx]?.[nz]?.[ny]?.block;
+                                : chunkData[nx][nz][ny].block;
 
                         const isExposed = neighborBlock === 'air' || neighborBlock.startsWith('flower_');
 
@@ -372,14 +402,13 @@ function renderChunk(scene, chunkX, chunkZ) {
         });
     });
 
-    // Update instance matrices
+    // Оновлюємо матриці інстансів після додавання всіх об'єктів
     Object.values(meshes).forEach(instancedMeshes => {
         instancedMeshes.forEach(mesh => {
             mesh.instanceMatrix.needsUpdate = true;
         });
     });
 }
-
 
 
 export function renderTerrain(scene) {
