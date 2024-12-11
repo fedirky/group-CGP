@@ -3,8 +3,8 @@ import app_settings from "../settings.json" with { type: "json" };
 
 const simplex = new SimplexNoise();
 
-const scale = 0.1;
-const heightMultiplier = 16;
+const scale = 0.02;
+const heightMultiplier = 22;
 
 const chunkSize = 16;
 const numChunksX = app_settings.generation.world_size;
@@ -43,7 +43,7 @@ function generateLandscape(chunkX, chunkZ) {
         for (let z = 0; z < chunkSize; z++) {
             landscape[x][z] = [];
 
-            const dirtheight = generateHeight(chunkX*16 + x, chunkZ*16 + z) / 3 + 8;
+            const dirtheight = generateHeight(chunkX*16 + x, chunkZ*16 + z) / 2 + 4;
             const stoneheight = generateHeight(chunkX*16 + x, chunkZ*16 + z) / 8 + 2;
 
             for (let y = 0; y < chunkSize; y++) {
@@ -53,7 +53,7 @@ function generateLandscape(chunkX, chunkZ) {
                     block = 'stone';
                 } else if (y < dirtheight) {
                     block = 'dirt';
-                } else if (y < 11) {
+                } else if (y < 8) {
                     block = 'water'; // Water below level 11
                 } else {
                     block = 'air';
@@ -154,11 +154,11 @@ function generateVegetation(chunkX, chunkZ) {
                         chunk[x][z][y].block = 'grass';
 
                         const ran = Math.random();
-                        if (ran < 0.025) {
+                        if (ran < 0.035) {
                             chunk[x][z][y + 1] = { block: `flower_${Math.floor(Math.random() * 7) + 1}` };
-                        } else if (ran < 0.5) {
+                        } else if (ran < 0.55) {
                             chunk[x][z][y + 1] = { block: 'flower_grass' };
-                        } else if (ran > 0.98) {
+                        } else if (ran > 0.995) {
                             chunk[x][z][y + 1] = { block: 'flower_glowberries' };
                         }
                     }
@@ -167,7 +167,7 @@ function generateVegetation(chunkX, chunkZ) {
 
                 // Sugarcane generation on sand
                 if (block === 'sand') {
-                    if (Math.random() < 0.05 && (y === chunkSize - 1 || chunk[x][z][y + 1]?.block === 'air')) {
+                    if (Math.random() < 0.35 && (y === chunkSize - 1 || chunk[x][z][y + 1]?.block === 'air')) {
                         const sugarCaneHeight = Math.floor(Math.random() * 3) + 1;
                         for (let h = 1; h <= sugarCaneHeight; h++) {
                             if (y + h < chunkSize) {
@@ -193,6 +193,39 @@ function generateVegetation(chunkX, chunkZ) {
         }
     }
 
+    // Tree generation
+    for (let quadrantX = 0; quadrantX < 2; quadrantX++) {
+        for (let quadrantZ = 0; quadrantZ < 2; quadrantZ++) {
+            const startX = quadrantX * 8 + 2; // Start x of the central 4x4 area
+            const startZ = quadrantZ * 8 + 2; // Start z of the central 4x4 area
+
+            if (Math.random() < 0.25) { // 25% chance to generate a tree in this quadrant
+                let treePlaced = false;
+                for (let attempt = 0; attempt < 10 && !treePlaced; attempt++) { // Try up to 10 times to find a valid position
+                    const offsetX = Math.floor(Math.random() * 4);
+                    const offsetZ = Math.floor(Math.random() * 4);
+                    const x = startX + offsetX;
+                    const z = startZ + offsetZ;
+
+                    for (let y = chunkSize - 1; y >= 0; y--) {
+                        if (chunk[x][z][y]?.block === 'grass' && chunk[x][z][y + 1]?.block === 'air') {
+                            // Generate tree
+                            const treeHeight = Math.floor(Math.random() * 2) + 4; // Random height between 4 and 7
+                            for (let h = 1; h <= treeHeight; h++) {
+                                if (y + h < chunkSize) {
+                                    chunk[x][z][y + h] = { block: 'log_oak' };
+                                }
+                            }
+                            treePlaced = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // console.log(`Vegetation generation complete for chunk (${chunkX}, ${chunkZ}).`);
     return chunk;
 }
+

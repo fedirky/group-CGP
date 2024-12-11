@@ -50,6 +50,10 @@ function getBlockTexture(block, isTopFace = false) {
                 texturePath = './textures/blocks/glowberries.png';
                 bumpPath = './textures/blocks/no_bump.png';
                 break;
+            case 'log_oak':
+                texturePath = './textures/blocks/log_oak.png';
+                bumpPath = './textures/blocks/no_bump.png';
+                break;
         }
     }
 
