@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 
-import app_settings from "../settings.json" with { type: "json" };
-
 import { getChunk } from './terrain_generator.js';
 
 
+import app_settings from "../settings.json" with { type: "json" };
+
+
+const textures = `../resources/texturepacks/${app_settings.texturepack}`;
 const numChunksX = app_settings.generation.world_size;
 const numChunksZ = app_settings.generation.world_size;
 
@@ -18,43 +20,19 @@ const globalBumpScale = 1.2;
 
 
 function getBlockTexture(block, isTopFace = false) {
+
     let texturePath, bumpPath;
     let texture;
 
     if (block === 'grass') {
-        texturePath = isTopFace ? './textures/blocks/grass.png' : './textures/blocks/grass_side.png';
-        bumpPath = './textures/blocks/dirt_bump.png';
+        texturePath = isTopFace ? `${textures}/blocks/grass.png` : `${textures}/blocks/grass_side.png`;
+        bumpPath = `${textures}blocks/dirt_bump.png`;
+    } else if (block === 'water') {
+        texturePath = `${textures}/blocks/water_16x16.mp4`;
+        bumpPath = `${textures}/blocks/no_bump.png`;
     } else {
-        switch (block) {
-            case 'dirt':
-                texturePath = './textures/blocks/dirt.png';
-                bumpPath = './textures/blocks/dirt_bump.png';
-                break;
-            case 'water':
-                texturePath = './textures/blocks/water_16x16.mp4';
-                bumpPath = './textures/blocks/no_bump.png';
-                break;
-            case 'ice':
-                texturePath = './textures/blocks/ice.png';
-                bumpPath = './textures/blocks/no_bump.png';
-                break;
-            case 'sand':
-                texturePath = './textures/blocks/sand.png';
-                bumpPath = './textures/blocks/sand_bump.png';
-                break;
-            case 'stone':
-                texturePath = './textures/blocks/stone.png';
-                bumpPath = './textures/blocks/stone_bump.png';
-                break;
-            case 'test_glow':
-                texturePath = './textures/blocks/glowberries.png';
-                bumpPath = './textures/blocks/no_bump.png';
-                break;
-            case 'log_oak':
-                texturePath = './textures/blocks/log_oak.png';
-                bumpPath = './textures/blocks/no_bump.png';
-                break;
-        }
+        texturePath = `${textures}/blocks/${block}.png`;
+        bumpPath = `${textures}/blocks/${block}_bump.png`;
     }
 
     if (block === 'water') {
@@ -145,7 +123,7 @@ function getInstancedMeshesForMaterial(materialKey) {
 
 function createFlowerPlaneMaterial(flowerType) {
     if (!materials[flowerType]) {
-        const texture = textureLoader.load(`./textures/flowers/${flowerType}.png`);
+        const texture = textureLoader.load(`${textures}/flowers/${flowerType}.png`);
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.minFilter = THREE.LinearMipmapNearestFilter;
         texture.magFilter = THREE.NearestFilter;
@@ -160,7 +138,7 @@ function createFlowerPlaneMaterial(flowerType) {
 
         if (flowerType == "flower_glowberries") {
 
-            const emissive_texture = textureLoader.load(`./textures/flowers/${flowerType}_emissive.png`);
+            const emissive_texture = textureLoader.load(`${textures}/flowers/${flowerType}_emissive.png`);
             emissive_texture.colorSpace = THREE.SRGBColorSpace;
             emissive_texture.minFilter = THREE.LinearMipmapNearestFilter;
             emissive_texture.magFilter = THREE.NearestFilter;

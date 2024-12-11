@@ -1,23 +1,12 @@
 import * as THREE from 'three';
 
-import { OutputPass }     from 'three/addons/postprocessing/OutputPass.js';
-import { ShaderPass }     from 'three/addons/postprocessing/ShaderPass.js';
-import { 
-    EffectComposer, 
-    RenderPass, 
-    SelectiveBloomEffect, 
-    EffectPass, 
-    BlendFunction 
-  } from "postprocessing";
-import Stats          from 'three/addons/libs/stats.module.js';
+import { EffectComposer, RenderPass, SelectiveBloomEffect, EffectPass, BlendFunction } from "postprocessing";
+import Stats from 'three/addons/libs/stats.module.js';
 
-import { FlyControls }  from './utils/FlyControls.js';
-import { FXAAShader }   from './shaders/FXAAShader.js';
-import { renderTerrain, 
-         renderClouds } from './terrain/terrain_renderer.js';
-import { updateLighting, 
-         setTestMode }  from './utils/dayNightCycle.js';
-import { FireFlies }    from './fire_fly/FireFly.ts';
+import { FlyControls } from './utils/FlyControls.js';
+import { updateLighting, setTestMode }  from './utils/dayNightCycle.js';
+import { FireFlies } from './utils/fire_fly/FireFly.ts';
+import { renderTerrain, renderClouds } from './terrain/terrain_renderer.js';
 
 import app_settings from "./settings.json" with { type: "json" };
 

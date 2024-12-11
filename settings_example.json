@@ -1,4 +1,5 @@
 {
+    "texturepack": "default",
     "graphics": {
         "ssao": true,
         "fxaa": true
