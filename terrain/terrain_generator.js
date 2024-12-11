@@ -46,7 +46,7 @@ function generateLandscape(chunkX, chunkZ) {
             const dirtheight = generateHeight(chunkX*16 + x, chunkZ*16 + z) / 2 + 4;
             const stoneheight = generateHeight(chunkX*16 + x, chunkZ*16 + z) / 8 + 2;
 
-            for (let y = 0; y < chunkSize; y++) {
+            for (let y = 0; y < chunkSize * 2; y++) {
                 let block;
 
                 if (y < stoneheight) {
@@ -134,6 +134,49 @@ function generateWater(chunkX, chunkZ) {
 }
 
 
+// Function to generate a tree at a specific position
+function generateTree(chunk, x, z, y) {
+    const treeHeight = Math.floor(Math.random() * 2) + 4; // Random height between 4 and 7
+
+    // Generate the trunk
+    for (let h = 1; h <= treeHeight; h++) {
+        if (y + h < chunkSize * 2) {
+            chunk[x][z][y + h] = { block: 'log_oak' };
+        }
+    }
+
+    const crownStart = y + treeHeight; // Crown starts at the top of the trunk
+    const crownLayers = [2, 2, 1]; // Radii for each of the 3 layers of the crown
+
+    for (let layer = 0; layer < crownLayers.length; layer++) {
+        const radius = crownLayers[layer];
+        const layerY = crownStart + layer; // Y-coordinate for this layer
+
+        for (let dx = -radius; dx <= radius; dx++) {
+            for (let dz = -radius; dz <= radius; dz++) {
+                // Check for 3-5-5-5-3 pattern when radius is 2
+                if (
+                    radius === 2 &&
+                    !(Math.abs(dx) === 2 && Math.abs(dz) === 2) ||
+                    radius !== 2 && Math.abs(dx) + Math.abs(dz) <= radius
+                ) {
+                    const leafX = x + dx;
+                    const leafZ = z + dz;
+                    if (
+                        leafX >= 0 && leafX < chunkSize &&
+                        leafZ >= 0 && leafZ < chunkSize &&
+                        layerY < chunkSize * 2 &&
+                        chunk[leafX][leafZ][layerY]?.block === 'air'
+                    ) {
+                        chunk[leafX][leafZ][layerY] = { block: 'leaves_oak' };
+                    }
+                }
+            }
+        }
+    }
+}
+
+
 // Third loop: Set topmost dirt blocks to grass, add random flowers, generate sugarcane, and convert water to ice
 function generateVegetation(chunkX, chunkZ) {
 
@@ -198,26 +241,20 @@ function generateVegetation(chunkX, chunkZ) {
         for (let quadrantZ = 0; quadrantZ < 2; quadrantZ++) {
             const startX = quadrantX * 8 + 2; // Start x of the central 4x4 area
             const startZ = quadrantZ * 8 + 2; // Start z of the central 4x4 area
-
+    
             if (Math.random() < 0.25) { // 25% chance to generate a tree in this quadrant
                 let treePlaced = false;
-                for (let attempt = 0; attempt < 10 && !treePlaced; attempt++) { // Try up to 10 times to find a valid position
-                    const offsetX = Math.floor(Math.random() * 4);
-                    const offsetZ = Math.floor(Math.random() * 4);
-                    const x = startX + offsetX;
-                    const z = startZ + offsetZ;
-
-                    for (let y = chunkSize - 1; y >= 0; y--) {
-                        if (chunk[x][z][y]?.block === 'grass' && chunk[x][z][y + 1]?.block === 'air') {
-                            // Generate tree
-                            const treeHeight = Math.floor(Math.random() * 2) + 4; // Random height between 4 and 7
-                            for (let h = 1; h <= treeHeight; h++) {
-                                if (y + h < chunkSize) {
-                                    chunk[x][z][y + h] = { block: 'log_oak' };
-                                }
+                for (let offsetX = 0; offsetX < 4 && !treePlaced; offsetX++) {
+                    for (let offsetZ = 0; offsetZ < 4 && !treePlaced; offsetZ++) {
+                        const x = startX + offsetX;
+                        const z = startZ + offsetZ;
+    
+                        for (let y = chunkSize - 1; y >= 0; y--) {
+                            if (chunk[x][z][y]?.block === 'grass' && chunk[x][z][y + 1]?.block === 'air') {
+                                generateTree(chunk, x, z, y); // 50% chance for spruce
+                                treePlaced = true;
+                                break;
                             }
-                            treePlaced = true;
-                            break;
                         }
                     }
                 }
