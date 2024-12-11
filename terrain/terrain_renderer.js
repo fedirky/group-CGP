@@ -122,7 +122,7 @@ function getBlockMaterial(block, isTopFace = false) {
                 opacity: 1.0,
                 depthWrite: true,
             });
-            materials[textureKey] = new THREE.MeshLambertMaterial(materialConfig);
+            materials[textureKey] = new THREE.MeshStandardMaterial(materialConfig);
         } else {
             materials[textureKey] = new THREE.MeshLambertMaterial(materialConfig);
         }

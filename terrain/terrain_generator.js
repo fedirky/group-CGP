@@ -76,18 +76,17 @@ function generateLandscape(chunkX, chunkZ) {
 
 // Second loop: Convert dirt adjacent to water into sand
 function generateWater(chunkX, chunkZ) {
-
     const chunk = getChunk(chunkX, chunkZ);
     if (!chunk) {
         console.error(`Chunk (${chunkX}, ${chunkZ}) not found.`);
         return false;
     }
-    
+
     for (let x = 0; x < chunkSize; x++) {
         for (let z = 0; z < chunkSize; z++) {
             for (let y = 0; y < chunkSize; y++) {
                 if (chunk[x][z][y].block === 'dirt') {
-                    // Check neighbors for water
+                    // Define neighbors
                     const neighbors = [
                         [x - 1, z, y], [x + 1, z, y], // Horizontal neighbors (x-axis)
                         [x, z - 1, y], [x, z + 1, y], // Horizontal neighbors (z-axis)
@@ -95,11 +94,32 @@ function generateWater(chunkX, chunkZ) {
                     ];
 
                     for (const [nx, nz, ny] of neighbors) {
+                        let neighborChunk = chunk;
+                        let localX = nx, localZ = nz;
+
+                        // Handle boundary crossing
+                        if (nx < 0) {
+                            neighborChunk = getChunk(chunkX - 1, chunkZ);
+                            localX = chunkSize - 1;
+                        } else if (nx >= chunkSize) {
+                            neighborChunk = getChunk(chunkX + 1, chunkZ);
+                            localX = 0;
+                        }
+                        if (nz < 0) {
+                            neighborChunk = getChunk(chunkX, chunkZ - 1);
+                            localZ = chunkSize - 1;
+                        } else if (nz >= chunkSize) {
+                            neighborChunk = getChunk(chunkX, chunkZ + 1);
+                            localZ = 0;
+                        }
+
+                        // Check if neighborChunk exists and has a water block
                         if (
-                            nx >= 0 && nx < chunkSize &&
-                            nz >= 0 && nz < chunkSize &&
+                            neighborChunk &&
+                            localX >= 0 && localX < chunkSize &&
+                            localZ >= 0 && localZ < chunkSize &&
                             ny >= 0 && ny < chunkSize &&
-                            chunk[nx][nz][ny]?.block === 'water'
+                            neighborChunk[localX][localZ][ny]?.block === 'water'
                         ) {
                             chunk[x][z][y].block = 'sand';
                             break; // Stop checking other neighbors
@@ -110,7 +130,6 @@ function generateWater(chunkX, chunkZ) {
         }
     }
 
-    // console.log(`Water processing complete for chunk (${chunkX}, ${chunkZ}).`);
     return true;
 }
 
