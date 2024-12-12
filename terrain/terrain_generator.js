@@ -17,7 +17,8 @@ for (let i = -Math.round(numChunksX/2); i < Math.round(numChunksX/2); i++) {
     for (let j = -Math.round(numChunksZ/2); j < Math.round(numChunksZ/2); j++) {
         generateLandscape(i, j);
         generateWater(i, j);
-        generateVegetation(i, j);
+        generateTrees(i, j);
+        generatePlants(i, j);
     }
 };
 
@@ -177,15 +178,52 @@ function generateTree(chunk, x, z, y) {
 }
 
 
-// Third loop: Set topmost dirt blocks to grass, add random flowers, generate sugarcane, and convert water to ice
-function generateVegetation(chunkX, chunkZ) {
-
+// Function to generate trees in the chunk
+function generateTrees(chunkX, chunkZ) {
+    
     const chunk = getChunk(chunkX, chunkZ);
     if (!chunk) {
         console.error(`Chunk (${chunkX}, ${chunkZ}) not found.`);
         return false;
     }
-    
+
+    for (let quadrantX = 0; quadrantX < 2; quadrantX++) {
+        for (let quadrantZ = 0; quadrantZ < 2; quadrantZ++) {
+            const startX = quadrantX * 8 + 2; // Start x of the central 4x4 area
+            const startZ = quadrantZ * 8 + 2; // Start z of the central 4x4 area
+
+            if (Math.random() < 0.25) { // 25% chance to generate a tree in this quadrant
+                let treePlaced = false;
+                for (let offsetX = 0; offsetX < 4 && !treePlaced; offsetX++) {
+                    for (let offsetZ = 0; offsetZ < 4 && !treePlaced; offsetZ++) {
+                        const x = startX + offsetX;
+                        const z = startZ + offsetZ;
+
+                        for (let y = chunkSize - 1; y >= 0; y--) {
+                            if (chunk[x][z][y]?.block === 'dirt' && chunk[x][z][y + 1]?.block === 'air') {
+                                generateTree(chunk, x, z, y); // Generate tree
+                                treePlaced = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return true;
+}
+
+
+// Function to generate small plants, grass, flowers, and other vegetation in the chunk
+function generatePlants(chunkX, chunkZ) {
+    const chunk = getChunk(chunkX, chunkZ);
+    if (!chunk) {
+        console.error(`Chunk (${chunkX}, ${chunkZ}) not found.`);
+        return false;
+    }
+
     for (let x = 0; x < chunkSize; x++) {
         for (let z = 0; z < chunkSize; z++) {
             for (let y = chunkSize - 1; y >= 0; y--) {
@@ -200,7 +238,9 @@ function generateVegetation(chunkX, chunkZ) {
                         if (ran < 0.035) {
                             chunk[x][z][y + 1] = { block: `flower_${Math.floor(Math.random() * 7) + 1}` };
                         } else if (ran < 0.55) {
-                            chunk[x][z][y + 1] = { block: 'flower_grass' };
+                            if (app_settings.graphics.foliage) {
+                                chunk[x][z][y + 1] = { block: 'flower_grass' };
+                            }
                         } else if (ran > 0.995) {
                             chunk[x][z][y + 1] = { block: 'flower_glowberries' };
                         }
@@ -221,48 +261,22 @@ function generateVegetation(chunkX, chunkZ) {
                 }
 
                 // Ice and lily pad generation on water
-                if (block === 'water') {
-                    if (y === chunkSize - 1 || chunk[x][z][y + 1]?.block === 'air') {
-                        const ran = Math.random();
-                        if (ran < 0.25) {
-                            chunk[x][z][y].block = 'ice';
-                        } else if (ran > 0.9) {
-                            chunk[x][z][y + 1] = { block: 'flower_lily' };
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-    }
-
-    // Tree generation
-    for (let quadrantX = 0; quadrantX < 2; quadrantX++) {
-        for (let quadrantZ = 0; quadrantZ < 2; quadrantZ++) {
-            const startX = quadrantX * 8 + 2; // Start x of the central 4x4 area
-            const startZ = quadrantZ * 8 + 2; // Start z of the central 4x4 area
-    
-            if (Math.random() < 0.25) { // 25% chance to generate a tree in this quadrant
-                let treePlaced = false;
-                for (let offsetX = 0; offsetX < 4 && !treePlaced; offsetX++) {
-                    for (let offsetZ = 0; offsetZ < 4 && !treePlaced; offsetZ++) {
-                        const x = startX + offsetX;
-                        const z = startZ + offsetZ;
-    
-                        for (let y = chunkSize - 1; y >= 0; y--) {
-                            if (chunk[x][z][y]?.block === 'grass' && chunk[x][z][y + 1]?.block === 'air') {
-                                generateTree(chunk, x, z, y); // 50% chance for spruce
-                                treePlaced = true;
-                                break;
+                if (app_settings.graphics.foliage) {
+                    if (block === 'water') {
+                        if (y === chunkSize - 1 || chunk[x][z][y + 1]?.block === 'air') {
+                            const ran = Math.random();
+                            if (ran < 0.25) {
+                                chunk[x][z][y].block = 'ice';
+                            } else if (ran > 0.9) {
+                                chunk[x][z][y + 1] = { block: 'flower_lily' };
                             }
                         }
+                        break;
                     }
                 }
             }
         }
     }
 
-    // console.log(`Vegetation generation complete for chunk (${chunkX}, ${chunkZ}).`);
-    return chunk;
+    return true;
 }
-
