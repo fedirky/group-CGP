@@ -10,13 +10,16 @@ const textures = `../resources/texturepacks/${app_settings.texturepack}`;
 const numChunksX = app_settings.generation.world_size;
 const numChunksZ = app_settings.generation.world_size;
 
+const globalBumpScale = 1.2;
+
 const textureLoader = new THREE.TextureLoader();
 const materials = {};
-const meshes = {}; // Store arrays of InstancedMeshes by block type
-const maxFlowerInstances = 1024;
-const flowerMeshes = {};
 
-const globalBumpScale = 1.2;
+const maxInstancesPerMesh = 2048;
+const maxFlowerInstances = 2048;
+
+const meshes = {}; // Store arrays of InstancedMeshes by block type
+const flowerMeshes = {};
 
 
 function getBlockTexture(block, isTopFace = false) {
@@ -244,7 +247,6 @@ function renderChunk(scene, chunkX, chunkZ) {
     const CHUNK_SIZE = 16; // Розмір чанку. Має співпадати з тим, що використовується в getChunk
 
     const chunkData = getChunk(chunkX, chunkZ);
-    const maxInstancesPerMesh = 1024;
     const tempMatrix = new THREE.Matrix4();
 
     const renderFace = (block, posX, posY, posZ, offset, rotation, isTopFace) => {
