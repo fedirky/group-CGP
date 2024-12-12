@@ -108,6 +108,24 @@ function getBlockMaterial(block, isTopFace = false) {
                 depthWrite: true,
             };
             materials[textureKey] = new THREE.MeshPhongMaterial(materialConfig);
+        } else if (block.includes('oak_gold')) {
+            var emissiveMap = textureLoader.load(`${textures}/blocks/${block}_emissive.png`);
+            emissiveMap.minFilter = THREE.LinearMipmapNearestFilter;
+            emissiveMap.magFilter = THREE.NearestFilter;
+            emissiveMap.generateMipmaps = true;
+            emissiveMap.anisotropy = 16;
+
+            materialConfig = {
+                map: map,
+                bumpMap: bumpMap,
+                bumpScale: globalBumpScale,
+                side: THREE.FrontSide,
+                emissiveMap: emissiveMap,
+                emissive: new THREE.Color(0xFFBA3D),
+                emissiveIntensity: 0.25,
+                depthWrite: true,
+            };
+            materials[textureKey] = new THREE.MeshPhongMaterial(materialConfig);
         } else if (block === 'water') {
             // Special case for water (transparency and material settings)
             Object.assign(materialConfig, {
@@ -307,7 +325,7 @@ function renderChunk(scene, chunkX, chunkZ) {
                         const color = new THREE.Color(colorHex); 
                         const light = new THREE.PointLight(color, intensity, 5);
                         light.position.set(posX + cubeSize / 2, posY + cubeSize / 2, posZ + cubeSize / 2);
-                        scene.add(light);
+                        // scene.add(light);
                     }
                 }
 

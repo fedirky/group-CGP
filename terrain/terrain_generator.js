@@ -137,12 +137,17 @@ function generateWater(chunkX, chunkZ) {
 
 // Function to generate a tree at a specific position
 function generateTree(chunk, x, z, y) {
+    
+    const trees = ["oak", "oak_gold", "skyroot"];
+    const tree  = trees[Math.floor(Math.random() * trees.length)];
+
+
     const treeHeight = Math.floor(Math.random() * 2) + 4; // Random height between 4 and 7
 
     // Generate the trunk
     for (let h = 1; h <= treeHeight; h++) {
         if (y + h < chunkSize * 2) {
-            chunk[x][z][y + h] = { block: 'skyroot_log' };
+            chunk[x][z][y + h] = { block: `${tree}_log` };
         }
     }
 
@@ -169,8 +174,9 @@ function generateTree(chunk, x, z, y) {
                         (!chunk[leafX][leafZ][layerY] || chunk[leafX][leafZ][layerY].block === 'air')
                     ) {
                         // Assign leaves with 25% chance of being golden
-                        const isGoldenLeaf = Math.random() < 0.01;
-                        chunk[leafX][leafZ][layerY] = { block: isGoldenLeaf ? 'skyroot_leaves_berry_glowing_ffffff_3' : 'skyroot_leaves' };
+                        // const isGoldenLeaf = Math.random() < 0.01;
+                        // chunk[leafX][leafZ][layerY] = { block: isGoldenLeaf ? 'skyroot_leaves_berry_glowing_ffffff_3' : 'skyroot_leaves' };
+                        chunk[leafX][leafZ][layerY] = { block: `${tree}_leaves` };
                     }
                 }
             }

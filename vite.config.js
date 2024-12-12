@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: '/group-CGP/',
+  base: '/',
   build: {
     outDir: 'dist',
   },
