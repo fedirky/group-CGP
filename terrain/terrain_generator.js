@@ -142,7 +142,7 @@ function generateTree(chunk, x, z, y) {
     // Generate the trunk
     for (let h = 1; h <= treeHeight; h++) {
         if (y + h < chunkSize * 2) {
-            chunk[x][z][y + h] = { block: 'log_oak' };
+            chunk[x][z][y + h] = { block: 'skyroot_log' };
         }
     }
 
@@ -157,9 +157,8 @@ function generateTree(chunk, x, z, y) {
             for (let dz = -radius; dz <= radius; dz++) {
                 // Check for 3-5-5-5-3 pattern when radius is 2
                 if (
-                    radius === 2 &&
-                    !(Math.abs(dx) === 2 && Math.abs(dz) === 2) ||
-                    radius !== 2 && Math.abs(dx) + Math.abs(dz) <= radius
+                    (radius === 2 && !(Math.abs(dx) === 2 && Math.abs(dz) === 2)) ||
+                    (radius !== 2 && Math.abs(dx) + Math.abs(dz) <= radius)
                 ) {
                     const leafX = x + dx;
                     const leafZ = z + dz;
@@ -167,15 +166,18 @@ function generateTree(chunk, x, z, y) {
                         leafX >= 0 && leafX < chunkSize &&
                         leafZ >= 0 && leafZ < chunkSize &&
                         layerY < chunkSize * 2 &&
-                        chunk[leafX][leafZ][layerY]?.block === 'air'
+                        (!chunk[leafX][leafZ][layerY] || chunk[leafX][leafZ][layerY].block === 'air')
                     ) {
-                        chunk[leafX][leafZ][layerY] = { block: 'leaves_oak' };
+                        // Assign leaves with 25% chance of being golden
+                        const isGoldenLeaf = Math.random() < 0.01;
+                        chunk[leafX][leafZ][layerY] = { block: isGoldenLeaf ? 'skyroot_leaves_berry_glowing_ffffff_3' : 'skyroot_leaves' };
                     }
                 }
             }
         }
     }
 }
+
 
 
 // Function to generate trees in the chunk

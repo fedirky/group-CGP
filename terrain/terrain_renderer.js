@@ -83,8 +83,16 @@ function getBlockMaterial(block, isTopFace = false) {
             map: map,
             bumpMap: bumpMap,
             bumpScale: globalBumpScale,
-            side: THREE.DoubleSide,
+            side: THREE.FrontSide,
         };
+        if (block.includes('leaves')) {
+            materialConfig = {
+                map: map,
+                bumpMap: bumpMap,
+                bumpScale: globalBumpScale,
+                side: THREE.FrontSide,
+            };
+        }
 
         // Special case for ice (using Phong material)
         if (block === 'ice') {
@@ -92,7 +100,7 @@ function getBlockMaterial(block, isTopFace = false) {
                 map: map,
                 bumpMap: bumpMap,
                 bumpScale: globalBumpScale,
-                side: THREE.DoubleSide,
+                side: THREE.FrontSide,
                 shininess: 10,
                 specular: new THREE.Color(0x99ccff),
                 transparent: false,
@@ -290,23 +298,35 @@ function renderChunk(scene, chunkX, chunkZ) {
                     return;
                 }
 
+                if (block.includes('_glowing_')) {
+                    const parts = block.split('_');
+                    const colorHex = `#${parts[parts.length - 2]}`;
+                    const intensity = parseFloat(parts[parts.length - 1]);
+
+                    if (intensity && colorHex) {
+                        const color = new THREE.Color(colorHex); 
+                        const light = new THREE.PointLight(color, intensity, 5);
+                        light.position.set(posX + cubeSize / 2, posY + cubeSize / 2, posZ + cubeSize / 2);
+                        scene.add(light);
+                    }
+                }
+
+                // Відкориговані орієнтації для кожної грані
                 const neighbors = [
-                    { offset: [-1, 0, 0], rotation: [0, Math.PI / 2, 0],  isTopFace: false, direction: 'left' },
-                    { offset: [1, 0, 0],  rotation: [0, -Math.PI / 2, 0], isTopFace: false, direction: 'right' },
-                    { offset: [0, -1, 0], rotation: [Math.PI / 2, 0, 0], isTopFace: false, direction: 'down' },
-                    { offset: [0, 1, 0],  rotation: [-Math.PI / 2, 0, 0],isTopFace: true,  direction: 'up' },
-                    { offset: [0, 0, -1], rotation: [0, 0, 0],          isTopFace: false, direction: 'back' },
-                    { offset: [0, 0, 1],  rotation: [0, Math.PI, 0],    isTopFace: false, direction: 'front' },
+                    { offset: [-1, 0, 0], rotation: [0, -Math.PI / 2, 0], isTopFace: false, direction: 'left' },
+                    { offset: [1, 0, 0],  rotation: [0, Math.PI / 2, 0],  isTopFace: false, direction: 'right' },
+                    { offset: [0, -1, 0], rotation: [Math.PI / 2, 0, 0],  isTopFace: false, direction: 'down' },
+                    { offset: [0, 1, 0],  rotation: [-Math.PI / 2, 0, 0], isTopFace: true,  direction: 'up' },
+                    { offset: [0, 0, -1], rotation: [0, Math.PI, 0],       isTopFace: false, direction: 'back' },
+                    { offset: [0, 0, 1],  rotation: [0, 0, 0],             isTopFace: false, direction: 'front' },
                 ];
 
                 const isEdgeBlock = x === 0 || x === CHUNK_SIZE - 1 || z === 0 || z === CHUNK_SIZE - 1;
 
                 if (isEdgeBlock) {
-                    // Якщо блок на краю чанку - перевіряємо сусідні чанки
                     neighbors.forEach(({ offset, rotation, isTopFace, direction }) => {
                         let [nx, ny, nz] = [x + offset[0], y + offset[1], z + offset[2]];
 
-                        // Отримуємо сусідній блок в поточному чанку (якщо в межах)
                         let neighborBlock = 'air';
                         if (
                             nx >= 0 && nx < CHUNK_SIZE &&
@@ -316,13 +336,11 @@ function renderChunk(scene, chunkX, chunkZ) {
                             neighborBlock = chunkData[nx][nz][ny].block;
                         }
 
-                        // Обчислюємо координати та чанк сусіда
                         let neighborChunkX = chunkX;
                         let neighborChunkZ = chunkZ;
                         let nxAligned = nx;
                         let nzAligned = nz;
 
-                        // Коригування індексів для сусідніх чанків
                         if (direction === 'left' && nx < 0) {
                             neighborChunkX = chunkX - 1;
                             nxAligned = CHUNK_SIZE - 1;
@@ -351,7 +369,6 @@ function renderChunk(scene, chunkX, chunkZ) {
                             alignedBlock = alignedChunkData[nxAligned][nzAligned][ny].block;
                         }
 
-                        // Визначаємо, чи грань відкрита
                         const isExposed = (neighborBlock === 'air' || neighborBlock.startsWith('flower_')) &&
                                           (alignedBlock === 'air' || alignedBlock.startsWith('flower_'));
 
@@ -362,7 +379,6 @@ function renderChunk(scene, chunkX, chunkZ) {
                         }
                     });
                 } else {
-                    // Для не крайових блоків використовуємо стару логіку
                     neighbors.forEach(({ offset, rotation, isTopFace }) => {
                         const [nx, ny, nz] = [x + offset[0], y + offset[1], z + offset[2]];
 
@@ -386,13 +402,13 @@ function renderChunk(scene, chunkX, chunkZ) {
         });
     });
 
-    // Оновлюємо матриці інстансів після додавання всіх об'єктів
     Object.values(meshes).forEach(instancedMeshes => {
         instancedMeshes.forEach(mesh => {
             mesh.instanceMatrix.needsUpdate = true;
         });
     });
 }
+
 
 
 export function renderTerrain(scene) {
