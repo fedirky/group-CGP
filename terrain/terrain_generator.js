@@ -137,12 +137,10 @@ function generateWater(chunkX, chunkZ) {
 
 // Function to generate a tree at a specific position
 function generateTree(chunk, x, z, y) {
-    
     const trees = ["oak", "oak_gold", "skyroot"];
-    const tree  = trees[Math.floor(Math.random() * trees.length)];
+    const tree = trees[Math.floor(Math.random() * trees.length)];
 
-
-    const treeHeight = Math.floor(Math.random() * 2) + 4; // Random height between 4 and 7
+    const treeHeight = Math.floor(Math.random() * 2) + 3; // Random height between 4 and 7
 
     // Generate the trunk
     for (let h = 1; h <= treeHeight; h++) {
@@ -152,7 +150,7 @@ function generateTree(chunk, x, z, y) {
     }
 
     const crownStart = y + treeHeight; // Crown starts at the top of the trunk
-    const crownLayers = [2, 2, 1]; // Radii for each of the 3 layers of the crown
+    const crownLayers = [2, 2, 2, 1]; // Radii for each of the 3 layers of the crown
 
     for (let layer = 0; layer < crownLayers.length; layer++) {
         const radius = crownLayers[layer];
@@ -174,9 +172,12 @@ function generateTree(chunk, x, z, y) {
                         (!chunk[leafX][leafZ][layerY] || chunk[leafX][leafZ][layerY].block === 'air')
                     ) {
                         if (tree === 'skyroot') {
-                            // Assign leaves with 25% chance of being golden
-                            const isGoldenLeaf = Math.random() < 0.05;
-                            chunk[leafX][leafZ][layerY] = { block: isGoldenLeaf ? 'skyroot_leaves_berry_glowing_ffffff_3' : 'skyroot_leaves' };
+                            // Generate glowing berries only on the lowest layer of leaves and inner layer (next to log)
+                            if (layer === 0 && Math.abs(dx) <= 1 && Math.abs(dz) <= 1 && Math.random() < 0.05) {
+                                chunk[leafX][leafZ][layerY] = { block: 'skyroot_leaves_berry_glowing_ffffff_3' };
+                            } else {
+                                chunk[leafX][leafZ][layerY] = { block: 'skyroot_leaves' };
+                            }
                         } else {
                             chunk[leafX][leafZ][layerY] = { block: `${tree}_leaves` };
                         }
@@ -186,6 +187,7 @@ function generateTree(chunk, x, z, y) {
         }
     }
 }
+
 
 
 
