@@ -10,7 +10,7 @@ const textures = `../resources/texturepacks/${app_settings.texturepack}`;
 const numChunksX = app_settings.generation.world_size;
 const numChunksZ = app_settings.generation.world_size;
 
-const globalBumpScale = 1.2;
+const globalBumpScale = 0.8;
 
 const textureLoader = new THREE.TextureLoader();
 const materials = {};
@@ -325,7 +325,7 @@ function renderChunk(scene, chunkX, chunkZ) {
                         const color = new THREE.Color(colorHex); 
                         const light = new THREE.PointLight(color, intensity, 5);
                         light.position.set(posX + cubeSize / 2, posY + cubeSize / 2, posZ + cubeSize / 2);
-                        // scene.add(light);
+                        scene.add(light);
                     }
                 }
 
