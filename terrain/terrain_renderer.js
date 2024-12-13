@@ -24,18 +24,21 @@ const flowerMeshes = {};
 
 function getBlockTexture(block, isTopFace = false) {
 
-    let texturePath, bumpPath;
+    let texturePath, bumpPath, emissivePath;
     let texture;
 
     if (block === 'grass') {
         texturePath = isTopFace ? `${textures}/blocks/grass.png` : `${textures}/blocks/grass_side.png`;
         bumpPath = `${textures}blocks/dirt_bump.png`;
+        emissivePath = `${textures}/blocks/no_bump.png`;
     } else if (block === 'water') {
         texturePath = `${textures}/blocks/water_16x16.mp4`;
         bumpPath = `${textures}/blocks/no_bump.png`;
+        emissivePath = `${textures}/blocks/no_bump.png`;
     } else {
         texturePath = `${textures}/blocks/${block}.png`;
         bumpPath = `${textures}/blocks/${block}_bump.png`;
+        emissivePath = `${textures}/blocks/${block}_emissive.png`
     }
 
     if (block === 'water') {
@@ -71,75 +74,60 @@ function getBlockTexture(block, isTopFace = false) {
     bumpMap.generateMipmaps = true;
     bumpMap.anisotropy = 16;
 
-    return { map: texture, bumpMap: bumpMap };
+    const emissiveMap = textureLoader.load(emissivePath);
+    emissiveMap.minFilter = THREE.LinearMipmapNearestFilter;
+    emissiveMap.magFilter = THREE.NearestFilter;
+    emissiveMap.generateMipmaps = true;
+    emissiveMap.anisotropy = 16;
+
+    return { map: texture, bumpMap: bumpMap, emissiveMap: emissiveMap };
 }
 
 
 function getBlockMaterial(block, isTopFace = false) {
     const textureKey = isTopFace && block === 'grass' ? 'grass_top' : block;
+
     if (!materials[textureKey]) {
-        const { map, bumpMap } = getBlockTexture(block, isTopFace);
-        let materialConfig = {
+        const { map, bumpMap, emissiveMap } = getBlockTexture(block, isTopFace);
+        const baseConfig = {
             map: map,
             bumpMap: bumpMap,
             bumpScale: globalBumpScale,
             side: THREE.FrontSide,
         };
-        if (block.includes('leaves')) {
-            materialConfig = {
-                map: map,
-                bumpMap: bumpMap,
-                bumpScale: globalBumpScale,
-                side: THREE.FrontSide,
-            };
-        }
 
-        // Special case for ice (using Phong material)
+        let materialConfig = { ...baseConfig };
+
         if (block === 'ice') {
-            materialConfig = {
-                map: map,
-                bumpMap: bumpMap,
-                bumpScale: globalBumpScale,
-                side: THREE.FrontSide,
+            Object.assign(materialConfig, {
                 shininess: 10,
                 specular: new THREE.Color(0x99ccff),
-                transparent: false,
-                opacity: 1.0,
-                depthWrite: true,
-            };
+            });
             materials[textureKey] = new THREE.MeshPhongMaterial(materialConfig);
         } else if (block.includes('oak_gold')) {
-            var emissiveMap = textureLoader.load(`${textures}/blocks/${block}_emissive.png`);
-            emissiveMap.minFilter = THREE.LinearMipmapNearestFilter;
-            emissiveMap.magFilter = THREE.NearestFilter;
-            emissiveMap.generateMipmaps = true;
-            emissiveMap.anisotropy = 16;
-
-            materialConfig = {
-                map: map,
-                bumpMap: bumpMap,
-                bumpScale: globalBumpScale,
-                side: THREE.FrontSide,
-                emissiveMap: emissiveMap,
-                emissive: new THREE.Color(0xFFBA3D),
-                emissiveIntensity: 0.25,
-                depthWrite: true,
-            };
-            materials[textureKey] = new THREE.MeshPhongMaterial(materialConfig);
-        } else if (block === 'water') {
-            // Special case for water (transparency and material settings)
             Object.assign(materialConfig, {
-                transparent: true,
-                opacity: 1.0,
+                emissiveMap: emissiveMap,
+                emissive: new THREE.Color(0xA48601),
+                emissiveIntensity: 0.45,
                 depthWrite: true,
             });
-            materials[textureKey] = new THREE.MeshStandardMaterial(materialConfig);
+            materials[textureKey] = new THREE.MeshPhongMaterial(materialConfig);
+        } else if (block.includes('skyroot_leaves_berry')) {
+            Object.assign(materialConfig, {
+                emissiveMap: emissiveMap,
+                emissive: new THREE.Color(0x2D3D59),
+                emissiveIntensity: 0.35,
+                depthWrite: true,
+            });
+            materials[textureKey] = new THREE.MeshPhongMaterial(materialConfig);
         } else {
             materials[textureKey] = new THREE.MeshLambertMaterial(materialConfig);
         }
     }
+
     return materials[textureKey];
 }
+
 
 
 function getInstancedMeshesForMaterial(materialKey) {
@@ -325,7 +313,7 @@ function renderChunk(scene, chunkX, chunkZ) {
                         const color = new THREE.Color(colorHex); 
                         const light = new THREE.PointLight(color, intensity, 5);
                         light.position.set(posX + cubeSize / 2, posY + cubeSize / 2, posZ + cubeSize / 2);
-                        scene.add(light);
+                        // scene.add(light);
                     }
                 }
 

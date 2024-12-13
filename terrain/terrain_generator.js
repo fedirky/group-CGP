@@ -173,10 +173,13 @@ function generateTree(chunk, x, z, y) {
                         layerY < chunkSize * 2 &&
                         (!chunk[leafX][leafZ][layerY] || chunk[leafX][leafZ][layerY].block === 'air')
                     ) {
-                        // Assign leaves with 25% chance of being golden
-                        // const isGoldenLeaf = Math.random() < 0.01;
-                        // chunk[leafX][leafZ][layerY] = { block: isGoldenLeaf ? 'skyroot_leaves_berry_glowing_ffffff_3' : 'skyroot_leaves' };
-                        chunk[leafX][leafZ][layerY] = { block: `${tree}_leaves` };
+                        if (tree === 'skyroot') {
+                            // Assign leaves with 25% chance of being golden
+                            const isGoldenLeaf = Math.random() < 0.05;
+                            chunk[leafX][leafZ][layerY] = { block: isGoldenLeaf ? 'skyroot_leaves_berry_glowing_ffffff_3' : 'skyroot_leaves' };
+                        } else {
+                            chunk[leafX][leafZ][layerY] = { block: `${tree}_leaves` };
+                        }
                     }
                 }
             }

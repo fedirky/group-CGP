@@ -81,8 +81,8 @@ function transitionToEvening(scene, duration) {
 function transitionToNight(scene, duration) {
     setBackground(scene, 0x000033)
     setFog(scene, 0x000033, fogDensity, duration);
-    setAmbientLight(scene, 0x000033, 0.2, duration);
-    setDirectionalLight(scene, 0x000000, 0.1, duration);
+    setAmbientLight(scene, 0x454545, 0.2, duration);
+    setDirectionalLight(scene, 0x0B0B0B, 0.1, duration);
 }
 
 function setBackground(scene, color) {
