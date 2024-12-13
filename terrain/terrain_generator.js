@@ -173,8 +173,8 @@ function generateTree(chunk, x, z, y) {
                     ) {
                         if (tree === 'skyroot') {
                             // Generate glowing berries only on the lowest layer of leaves and inner layer (next to log)
-                            if (layer === 0 && Math.abs(dx) <= 1 && Math.abs(dz) <= 1 && Math.random() < 0.05) {
-                                chunk[leafX][leafZ][layerY] = { block: 'skyroot_leaves_berry_glowing_ffffff_3' };
+                            if (layer === 0 && Math.abs(dx) <= 1 && Math.abs(dz) <= 1 && Math.random() < 0.2) {
+                                chunk[leafX][leafZ][layerY] = { block: 'skyroot_leaves_berry_glowing_2D3D59_3' };
                             } else {
                                 chunk[leafX][leafZ][layerY] = { block: 'skyroot_leaves' };
                             }
@@ -254,7 +254,7 @@ function generatePlants(chunkX, chunkZ) {
                             if (app_settings.graphics.foliage) {
                                 chunk[x][z][y + 1] = { block: 'flower_grass' };
                             }
-                        } else if (ran > 0.995) {
+                        } else if (ran > 0.998) {
                             chunk[x][z][y + 1] = { block: 'flower_glowberries' };
                         }
                     }

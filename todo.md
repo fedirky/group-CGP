@@ -8,7 +8,7 @@ So be aware, as some things from this list will never be implemented.
 - [ ] [Graphics] Smooth day-night cycle transitions
 	- [ ] [UI] Add slider to control day-night cycle change speed
 - [X] [Worldgen] Chunk data saving and loading to JSON/global array
-	- [ ] [Worldgen] Block trees
-	- [ ] [Graphics] Disable rendering of invisible block sides between chunks
+	- [X] [Worldgen] Block trees
+	- [X] [Graphics] Disable rendering of invisible block sides between chunks
 - [ ] [UI] Make stats.js monitors bigger
 	- [ ] [UI] Add vertex count to stats.js monitors
