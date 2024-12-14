@@ -6,7 +6,7 @@ import { getChunk } from './terrain_generator.js';
 import app_settings from "../settings.json" with { type: "json" };
 
 
-const textures = `../resources/texturepacks/${app_settings.texturepack}`;
+const textures = `resources/texturepacks/${app_settings.texturepack}`;
 const numChunksX = app_settings.generation.world_size;
 const numChunksZ = app_settings.generation.world_size;
 
