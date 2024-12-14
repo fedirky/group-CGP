@@ -6,8 +6,7 @@ import {
 	WebGLRenderTarget
 } from '../three.r168.module.js';
 import { ShaderPass } from './ShaderPass.js';
-import { MaskPass } from './MaskPass.js';
-import { ClearMaskPass } from './MaskPass.js';
+import { MaskPass, ClearMaskPass } from './MaskPass.js';
 import { CopyShader } from '../shaders/CopyShader.js';
 
 

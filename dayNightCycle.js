@@ -1,7 +1,7 @@
 import * as THREE from './three.r168.module.js';
 
 
-const fogDensity = Math.sqrt(-Math.log(0.01) / Math.pow(8 * 16 * 2, 2));
+const fogDensity = Math.sqrt(-Math.log(0.0001) / Math.pow(8 * 16, 2));
 console.log(fogDensity);
 let testMode = true; // Flag to enable manual testing
 let testTime = 10;    // Default test time 12PM (afternoon)
