@@ -1,18 +1,18 @@
-import * as THREE from '/libs/three.r168.module.js';
+import * as THREE from './three.r168.module.js';
 
-import Stats from '/libs/Stats.js';
+import Stats from './Stats.js';
 
-import { EffectComposer } from '/libs/postprocessing/EffectComposer.js';
-import { RenderPass } from '/libs/postprocessing/RenderPass.js';
-import { OutputPass } from '/libs/postprocessing/OutputPass.js';
-import { ShaderPass } from '/libs/postprocessing/ShaderPass.js';
-import { FXAAShader } from '/shaders/FXAAShader.js';
+import { EffectComposer } from './postprocessing/EffectComposer.js';
+import { RenderPass } from './postprocessing/RenderPass.js';
+import { OutputPass } from './postprocessing/OutputPass.js';
+import { ShaderPass } from './postprocessing/ShaderPass.js';
+import { FXAAShader } from './shaders/FXAAShader.js';
 
-import { renderTerrain, renderClouds } from '/terrain_renderer.js';
+import { renderTerrain, renderClouds } from './terrain_renderer.js';
 
-import { FlyControls } from '/FlyControls.js';
+import { FlyControls } from './FlyControls.js';
 import { updateLighting, 
-         setTestMode } from '/dayNightCycle.js';
+         setTestMode } from './dayNightCycle.js';
 // import { FireFlies } from './utils/fire_fly/FireFly.ts';
 
 

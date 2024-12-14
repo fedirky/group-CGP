@@ -1,4 +1,4 @@
-import * as THREE from '/libs/three.r168.module.js';
+import * as THREE from './three.r168.module.js';
 
 
 const fogDensity = Math.sqrt(-Math.log(0.01) / Math.pow(8 * 16 * 2, 2));

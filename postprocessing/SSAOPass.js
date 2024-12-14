@@ -21,13 +21,13 @@ import {
 	Vector3,
 	WebGLRenderTarget,
 	ZeroFactor
-} from '/libs/three.r168.module.js';
-import { Pass, FullScreenQuad } from '/libs/postprocessing/Pass.js';
-import { SimplexNoise } from '/libs/postprocessing/SimplexNoise.js';
-import { SSAOShader } from '/shaders/SSAOShader.js';
-import { SSAOBlurShader } from '/shaders/SSAOShader.js';
-import { SSAODepthShader } from '/shaders/SSAOShader.js';
-import { CopyShader } from '/shaders/CopyShader.js';
+} from '../three.r168.module.js';
+import { Pass, FullScreenQuad } from './Pass.js';
+import { SimplexNoise } from './SimplexNoise.js';
+import { SSAOShader } from '../shaders/SSAOShader.js';
+import { SSAOBlurShader } from '../shaders/SSAOShader.js';
+import { SSAODepthShader } from '../shaders/SSAOShader.js';
+import { CopyShader } from '../shaders/CopyShader.js';
 
 class SSAOPass extends Pass {
 

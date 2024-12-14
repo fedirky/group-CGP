@@ -1,9 +1,9 @@
-import * as THREE from '/libs/three.r168.module.js';
+import * as THREE from './three.r168.module.js';
 
-import { getChunk } from '/terrain_generator.js';
+import { getChunk } from './terrain_generator.js';
 
 
-const textures = `/resources/texturepacks/default`;
+const textures = `./resources/texturepacks/default`;
 const numChunksX = 8;
 const numChunksZ = 8;
 
