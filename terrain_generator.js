@@ -1,4 +1,4 @@
-import app_settings from "settings.json" with { type: "json" };
+import app_settings from "/settings.json" with { type: "json" };
 
 
 const simplex = new SimplexNoise();

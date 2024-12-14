@@ -1,6 +1,6 @@
 import * as THREE from '/libs/three.r168.module.js';
 
-import app_settings from "settings.json" with { type: "json" };
+import app_settings from "/settings.json" with { type: "json" };
 
 
 const fogDensity = Math.sqrt(-Math.log(0.01) / Math.pow(app_settings.generation.world_size * 16 * 2, 2));
