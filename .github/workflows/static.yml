@@ -31,7 +31,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-    # Step 2: Create the settings.json file
       - name: Create settings.json
         run: |
           echo '{
