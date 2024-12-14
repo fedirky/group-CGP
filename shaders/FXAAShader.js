@@ -1,4 +1,4 @@
-import {Vector2} from 'three';
+import {Vector2} from '../libs/three.r168.module.js';
 
 const FXAAShader = {
 

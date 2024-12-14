@@ -1,11 +1,17 @@
-import * as THREE from 'three';
+import * as THREE from './libs/three.r168.module.js';
 
-import { EffectComposer, RenderPass, SelectiveBloomEffect, EffectPass, BlendFunction } from "postprocessing";
-import Stats from 'three/addons/libs/stats.module.js';
+import Stats from './libs/Stats.js';
+
+import { EffectComposer } from './libs/postprocessing/EffectComposer.js';
+import { RenderPass } from './libs/postprocessing/RenderPass.js';
+import { SAOPass } from './libs/postprocessing/SAOPass.js';
+import { OutputPass } from './libs/postprocessing/OutputPass.js';
+import { ShaderPass } from './libs/postprocessing/ShaderPass.js';
+import { FXAAShader } from './shaders/FXAAShader.js';
 
 import { FlyControls } from './utils/FlyControls.js';
 import { updateLighting, setTestMode }  from './utils/dayNightCycle.js';
-import { FireFlies } from './utils/fire_fly/FireFly.ts';
+// import { FireFlies } from './utils/fire_fly/FireFly.ts';
 import { renderTerrain, renderClouds } from './terrain/terrain_renderer.js';
 
 import app_settings from "./settings.json" with { type: "json" };
@@ -76,37 +82,33 @@ const composer = new EffectComposer(renderer);
 const renderPass = new RenderPass(scene, camera);
 composer.addPass(renderPass);
 
-// Налаштування SelectiveBloomEffect для об'єктів на шарі 2
-const effect = new SelectiveBloomEffect(scene, camera, {
-    blendFunction: BlendFunction.SCREEN,
-    mipmapBlur: true,
-    luminanceThreshold: 0.001,
-    luminanceSmoothing: 0.025,
-    intensity: 2.5,
-    radius: 1.0,
-});
+if (app_settings.graphics.ssao) {
+    const saoPass = new SAOPass(scene, camera);
+    composer.addPass(saoPass);
 
+    saoPass.params.saoBias = 10;
+    saoPass.params.saoIntensity = 0.015;
+    saoPass.params.saoScale = 7.5;
+    saoPass.params.saoKernelRadius = 50;
+    saoPass.params.saoMinResolution = 0;
+    saoPass.params.saoBlur = true;
+    saoPass.params.saoBlurRadius = 8;
+    saoPass.params.saoBlurStdDev = 12;
+    saoPass.params.saoBlurDepthCutoff = 0.0005;
+    saoPass.normalMaterial.side = THREE.DoubleSide;
+    saoPass.enabled = true;
+}
 
-// Додати до вибору для світіння тільки об'єкти на шарі 2
-scene.traverse((child) => {
-    if (child.isObject3D && (child.layers.test(camera.layers))) {
-        if (child.layers.isEnabled(2)) { // Перевіряємо, чи об'єкт знаходиться на шарі 2
-            effect.selection.add(child); // Додаємо об'єкт до ефекту
-        }
-    }
-});
+if (app_settings.graphics.fxaa) {
+    const fxaaPass = new ShaderPass(FXAAShader);
+    fxaaPass.material.uniforms['resolution'].value.set(1 / window.innerWidth, 1 / window.innerHeight);
+    composer.addPass(fxaaPass);
+}
 
-effect.inverted = false;
+const outputPass = new OutputPass();
+composer.addPass(outputPass);
 
-// Ігнорувати фон, якщо це необхідно
-effect.ignoreBackground = true;
-
-// Налаштування камери, щоб вона також бачила тільки об'єкти шару 2
-camera.layers.enable(2); // Увімкнення шару 2 для камери
-
-// Додати ефект до композера
-const effectPass = new EffectPass(camera, effect);
-composer.addPass(effectPass);
+// camera.layers.enable(2); // Увімкнення шару 2 для камери
 
 // Function to update composer size
 function updateComposerSize() {
@@ -145,12 +147,12 @@ document.addEventListener('keydown', (event) => {
 });
 
 
-const fireflies = new FireFlies(scene, {
+/*const fireflies = new FireFlies(scene, {
     groupCount: 2,
     firefliesPerGroup: 250,
     groupRadius: 10,
     groupCenters: [new THREE.Vector3(0, 25, 0)]
-});
+});*/
 
 // Animation loop
 function animate() {
@@ -160,7 +162,7 @@ function animate() {
     requestAnimationFrame(animate);
 
     updateLighting(scene, new Date());
-    fireflies.update(0.008); // Update fireflies
+    // fireflies.update(0.008); // Update fireflies
 
     composer.render();    
 

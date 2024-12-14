@@ -1,4 +1,4 @@
-import { ShaderMaterial, AdditiveBlending, Color } from 'three';
+import { ShaderMaterial, AdditiveBlending, Color } from '../../libs/three.r168.module';
 
 /**
  * Options for the FireFlyMaterial constructor.
