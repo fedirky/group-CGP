@@ -1,14 +1,11 @@
-import app_settings from "/settings.json" with { type: "json" };
-
-
 const simplex = new SimplexNoise();
 
 const scale = 0.02;
 const heightMultiplier = 22;
 
 const chunkSize = 16;
-const numChunksX = app_settings.generation.world_size;
-const numChunksZ = app_settings.generation.world_size;
+const numChunksX = 8;
+const numChunksZ = 8;
 
 const chunks = {};
 
@@ -251,7 +248,7 @@ function generatePlants(chunkX, chunkZ) {
                         if (ran < 0.035) {
                             chunk[x][z][y + 1] = { block: `flower_${Math.floor(Math.random() * 7) + 1}` };
                         } else if (ran < 0.55) {
-                            if (app_settings.graphics.foliage) {
+                            if (true) {
                                 chunk[x][z][y + 1] = { block: 'flower_grass' };
                             }
                         } else if (ran > 0.998) {
@@ -274,7 +271,7 @@ function generatePlants(chunkX, chunkZ) {
                 }
 
                 // Ice and lily pad generation on water
-                if (app_settings.graphics.foliage) {
+                if (true) {
                     if (block === 'water') {
                         if (y === chunkSize - 1 || chunk[x][z][y + 1]?.block === 'air') {
                             const ran = Math.random();

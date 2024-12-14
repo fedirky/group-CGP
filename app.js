@@ -13,8 +13,6 @@ import { updateLighting, setTestMode }  from '/utils/dayNightCycle.js';
 // import { FireFlies } from './utils/fire_fly/FireFly.ts';
 import { renderTerrain, renderClouds } from '/terrain_renderer.js';
 
-import app_settings from "/settings.json" with { type: "json" };
-
 
 // Stats UI
 const stats = Array.from({ length: 3 }, (_, i) => {
@@ -54,7 +52,7 @@ const ambientLight = new THREE.AmbientLight(0x404040, 15); // Soft white light
 scene.add(ambientLight);
 
 // Add fog
-const fogDensity = Math.sqrt(-Math.log(0.0001) / Math.pow(app_settings.generation.world_size * 16, 2));
+const fogDensity = Math.sqrt(-Math.log(0.0001) / Math.pow(8 * 16, 2));
 scene.fog = new THREE.FogExp2(0x87CEEB, fogDensity); 
 
 renderTerrain(scene);
@@ -81,11 +79,9 @@ const composer = new EffectComposer(renderer);
 const renderPass = new RenderPass(scene, camera);
 composer.addPass(renderPass);
 
-if (app_settings.graphics.fxaa) {
-    const fxaaPass = new ShaderPass(FXAAShader);
+const fxaaPass = new ShaderPass(FXAAShader);
     fxaaPass.material.uniforms['resolution'].value.set(1 / window.innerWidth, 1 / window.innerHeight);
     composer.addPass(fxaaPass);
-}
 
 const outputPass = new OutputPass();
 composer.addPass(outputPass);
@@ -98,9 +94,7 @@ function updateComposerSize() {
     renderer.setSize(width, height); // Set renderer size
     composer.setSize(width, height); // Set composer size
     
-    if (app_settings.graphics.fxaa) {
-        fxaaPass.material.uniforms['resolution'].value.set(1 / width, 1 / height);
-    }
+    fxaaPass.material.uniforms['resolution'].value.set(1 / width, 1 / height);
 }
 
 // Add event handler for window resize
