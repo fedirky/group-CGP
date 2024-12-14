@@ -4,7 +4,6 @@ import Stats from './libs/Stats.js';
 
 import { EffectComposer } from './libs/postprocessing/EffectComposer.js';
 import { RenderPass } from './libs/postprocessing/RenderPass.js';
-import { SAOPass } from './libs/postprocessing/SAOPass.js';
 import { OutputPass } from './libs/postprocessing/OutputPass.js';
 import { ShaderPass } from './libs/postprocessing/ShaderPass.js';
 import { FXAAShader } from './shaders/FXAAShader.js';
@@ -82,23 +81,6 @@ const composer = new EffectComposer(renderer);
 const renderPass = new RenderPass(scene, camera);
 composer.addPass(renderPass);
 
-if (app_settings.graphics.ssao) {
-    const saoPass = new SAOPass(scene, camera);
-    composer.addPass(saoPass);
-
-    saoPass.params.saoBias = 10;
-    saoPass.params.saoIntensity = 0.015;
-    saoPass.params.saoScale = 7.5;
-    saoPass.params.saoKernelRadius = 50;
-    saoPass.params.saoMinResolution = 0;
-    saoPass.params.saoBlur = true;
-    saoPass.params.saoBlurRadius = 8;
-    saoPass.params.saoBlurStdDev = 12;
-    saoPass.params.saoBlurDepthCutoff = 0.0005;
-    saoPass.normalMaterial.side = THREE.DoubleSide;
-    saoPass.enabled = true;
-}
-
 if (app_settings.graphics.fxaa) {
     const fxaaPass = new ShaderPass(FXAAShader);
     fxaaPass.material.uniforms['resolution'].value.set(1 / window.innerWidth, 1 / window.innerHeight);
@@ -107,8 +89,6 @@ if (app_settings.graphics.fxaa) {
 
 const outputPass = new OutputPass();
 composer.addPass(outputPass);
-
-// camera.layers.enable(2); // Увімкнення шару 2 для камери
 
 // Function to update composer size
 function updateComposerSize() {

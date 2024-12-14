@@ -191,11 +191,6 @@ function getOrCreateFlowerInstancedMesh(scene, flowerType) {
         const material = createFlowerPlaneMaterial(flowerType);
 
         const newMesh = new THREE.InstancedMesh(geometry, material, maxFlowerInstances);
-
-        if (flowerType === 'flower_glowberries') {
-            newMesh.layers.enable(2);
-        }
-
         newMesh.count = 0; // Track number of active instances
         currentMeshes.push(newMesh);
         scene.add(newMesh);
