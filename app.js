@@ -1,19 +1,19 @@
-import * as THREE from './libs/three.r168.module.js';
+import * as THREE from '/libs/three.r168.module.js';
 
-import Stats from './libs/Stats.js';
+import Stats from '/libs/Stats.js';
 
-import { EffectComposer } from './libs/postprocessing/EffectComposer.js';
-import { RenderPass } from './libs/postprocessing/RenderPass.js';
-import { OutputPass } from './libs/postprocessing/OutputPass.js';
-import { ShaderPass } from './libs/postprocessing/ShaderPass.js';
-import { FXAAShader } from './shaders/FXAAShader.js';
+import { EffectComposer } from '/libs/postprocessing/EffectComposer.js';
+import { RenderPass } from '/libs/postprocessing/RenderPass.js';
+import { OutputPass } from '/libs/postprocessing/OutputPass.js';
+import { ShaderPass } from '/libs/postprocessing/ShaderPass.js';
+import { FXAAShader } from '/shaders/FXAAShader.js';
 
-import { FlyControls } from './utils/FlyControls.js';
-import { updateLighting, setTestMode }  from './utils/dayNightCycle.js';
+import { FlyControls } from '/utils/FlyControls.js';
+import { updateLighting, setTestMode }  from '/utils/dayNightCycle.js';
 // import { FireFlies } from './utils/fire_fly/FireFly.ts';
-import { renderTerrain, renderClouds } from './terrain_renderer.js';
+import { renderTerrain, renderClouds } from '/terrain_renderer.js';
 
-import app_settings from "./settings.json" with { type: "json" };
+import app_settings from "/settings.json" with { type: "json" };
 
 
 // Stats UI

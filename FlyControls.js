@@ -1,4 +1,4 @@
-import {Controls, Quaternion, Vector3, Euler} from '../libs/three.r168.module.js';
+import {Controls, Quaternion, Vector3, Euler} from '/libs/three.r168.module.js';
 
 
 const _changeEvent = { type: 'change' };

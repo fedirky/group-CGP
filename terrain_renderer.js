@@ -1,6 +1,6 @@
 import * as THREE from '/libs/three.r168.module.js';
 
-import { getChunk } from './terrain_generator.js';
+import { getChunk } from 'terrain_generator.js';
 
 
 import app_settings from "settings.json" with { type: "json" };
