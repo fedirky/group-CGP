@@ -1,6 +1,6 @@
 import {
 	Vector2
-} from '../three.r168.module.js';
+} from '../libs/three.r168.module.js';
 
 /**
  * TODO

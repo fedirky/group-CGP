@@ -1,8 +1,11 @@
 {
+    "texturepack": "default",
+
     "graphics": {
-        "ssao": true,
+        "foliage": true,
         "fxaa": true
     },
+
     "generation": {
         "world_size": 8
     }

@@ -1,4 +1,4 @@
-import * as THREE from './three.r168.module.js';
+import * as THREE from './libs/three.r168.module.js';
 import { GLTFLoader } from './postprocessing/GLTFLoader.js';
 
 // Створюємо сцену, камеру та рендерер
