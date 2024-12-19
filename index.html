@@ -7,11 +7,31 @@
     <style>
         body { margin: 0; overflow: hidden; }
     </style>
+    <link rel="stylesheet" href="./ui.css">
 </head>
 <body>
     <!-- Підключення JavaScript-файлів -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/simplex-noise/2.4.0/simplex-noise.min.js"></script>
     <script src="https://threejs.org/examples/js/loaders/FontLoader.js"></script>
     <script type="module" src="./app.js"></script>
+
+    <!-- Day-Night Cycle Widget Container -->
+    <div id="day-night-widget">
+        <div id="clock-widget">
+            <div id="clock-face">
+                <div id="play-pause-button" class="button play"></div>
+                <div id="dial-handle"></div>
+            </div>
+            <div id="reset-button" class="button">Reset</div>
+            <input type="range" id="speed-slider" min="1" max="200" step="1" value="100">
+            <div id="time-display">
+                <div id="time-string">00:00</div>
+                <div id="time-label">Unknown</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="./dayNightCycle.js"></script>
+    <script type="module" src="./ui.js"></script>
 </body>
 </html>
