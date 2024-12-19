@@ -5,13 +5,14 @@ import { scene } from'./app.js';
 let isPlaying = false;
 let simulationSpeed = 100;
 let intervalId = null;
+let isSimulationInitialized = false;
 
 let originalSimulatedMinutes = null;
 let initialDialAngleAtDragStart = null;
 
 // Exporting to use in app.js
 export function isSimulationPlaying() {
-    return isPlaying;
+    return isSimulationInitialized;
 }
 
 // DOM Elements
@@ -63,6 +64,12 @@ function togglePlayPause() {
 }
 
 function startSimulation() {
+    if (!isSimulationInitialized) {
+        const localTime = new Date();
+        setSimulatedTime(localTime);
+        isSimulationInitialized = true;
+    }
+
     isPlaying = true;
     playPauseButton.classList.remove('play');
     playPauseButton.classList.add('pause');
@@ -85,6 +92,7 @@ function resetSimulation() {
     // Reset to actual local time
     pauseSimulation();
     setSimulatedTime(new Date());
+    isSimulationInitialized = false;
 
     const simulatedTime = getSimulatedTime();
     const totalMinutes = simulatedTime .getHours() * 60 + simulatedTime .getMinutes();
@@ -92,7 +100,7 @@ function resetSimulation() {
 
     // updateDialPositionFromAngle();
     updateUI(simulatedTime);
-    updateLighting(scene);
+    updateLighting(scene, simulatedTime);
 
     playPauseButton.classList.remove('pause');
     playPauseButton.classList.add('play');
@@ -162,6 +170,7 @@ function startDialDrag(e) {
 
 function dragDial(e) {
     if (!isDraggingDial) return;
+    isSimulationInitialized = true;
 
     const dx = e.clientX - dialCenter.x;
     const dy = e.clientY - dialCenter.y;

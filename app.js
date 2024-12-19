@@ -16,6 +16,7 @@ import { updateLighting,
 import { createGradientSky } from './GradientSky.js';
 import { isSimulationPlaying, updateUI } from './ui.js'; 
 import { getSimulatedTime } from './timeState.js';
+
 // import { FireFlies } from './utils/fire_fly/FireFly.ts';
 
 
@@ -61,7 +62,10 @@ const fogDensity = Math.sqrt(-Math.log(0.0001) / Math.pow(8 * 16, 2));
 scene.fog = new THREE.FogExp2(0x87CEEB, fogDensity); 
 
 renderTerrain(scene);
-renderClouds(scene);
+const cloudGroup = renderClouds(scene);
+cloudGroup.position.set(0,0,0);
+
+let lastMinute = null; // track minute changes
 
 const controls = new FlyControls(camera, renderer.domElement);
 controls.movementSpeed = 20;
@@ -140,6 +144,8 @@ export function updateLightingWithTime(time) {
     groupCenters: [new THREE.Vector3(0, 25, 0)]
 });*/
 
+const spreadDistance = 512;
+
 // Animation loop
 function animate() {
     
@@ -147,19 +153,35 @@ function animate() {
 
     requestAnimationFrame(animate);
 
+    let currentTime;
+
     // Update lighting with local time if simulation is not playing
     if (!isSimulationPlaying()) {
-        const localTime = new Date();
-        updateLighting(scene, localTime);
-        updateUI(localTime);
+        currentTime = new Date();
+        updateLighting(scene, currentTime);
+        updateUI(currentTime);
     } else {
+        currentTime = getSimulatedTime();
         updateLighting(scene); // otherwise just use simulatedTime
-        const simulatedTime = getSimulatedTime();
-        updateUI(simulatedTime);
+        updateUI(currentTime);
     }
 
     skyMesh.position.copy(camera.position);
     // fireflies.update(0.008); // Update fireflies
+
+    // Move clouds after every minute
+    const currentMinute = currentTime.getMinutes();
+    if (lastMinute !== currentMinute) {
+        cloudGroup.position.x += 0.1;  //move clouds to the right
+        lastMinute = currentMinute;
+    }
+
+    // Move clouds back to original position after the position exceeds 1/2 the spreadDistance
+    if (cloudGroup.position.x > spreadDistance / 2) {
+        cloudGroup.position.x -= spreadDistance;
+    } else if (cloudGroup.position.x < -spreadDistance / 2) {
+        cloudGroup.position.x += spreadDistance;
+    }
 
     composer.render();    
 
