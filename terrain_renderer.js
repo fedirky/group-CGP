@@ -532,4 +532,5 @@ export function renderClouds(scene) {
     }
 
     scene.add(cloudGroup);
+    return cloudGroup;
 }

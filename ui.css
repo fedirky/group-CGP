@@ -1,0 +1,111 @@
+#day-night-widget {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 150px;
+    font-family: sans-serif;
+    z-index: 9999;
+}
+
+#clock-widget {
+    background: rgba(0,0,0,0.7);
+    border-radius: 10px;
+    padding: 10px;
+    text-align: center;
+    color: #fff;
+}
+
+#clock-face {
+    position: relative;
+    width: 100px;
+    height: 100px;
+    margin: 0 auto;
+    border: 4px solid #fff;
+    border-radius: 50%;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.button {
+    cursor: pointer;
+    background: #fff;
+    color: #000;
+    padding: 5px 10px;
+    margin: 5px 0;
+    border-radius: 5px;
+    font-size: 12px;
+    display: inline-block;
+}
+
+#play-pause-button.button {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #fff;
+    position: relative;
+    z-index: 2;
+}
+
+#play-pause-button.play:after {
+    content: '';
+    position: absolute;
+    left: 9px;
+    top: 6px;
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 6px 0 6px 10px;
+    border-color: transparent transparent transparent #000;
+}
+
+#play-pause-button.pause:after {
+    content: '';
+    position: absolute;
+    top: 5px;
+    left: 7px;
+    width: 4px;
+    height: 14px;
+    background: #000;
+    box-shadow: 6px 0 #000;
+}
+
+#reset-button {
+    background: #ffcccc;
+    color: #000;
+    margin-top: 10px;
+}
+
+#speed-slider {
+    width: 100%;
+    margin: 10px 0;
+}
+
+#time-display {
+    margin-top: 10px;
+}
+
+#time-string {
+    font-size: 16px;
+    font-weight: bold;
+}
+
+#time-label {
+    font-size: 12px;
+    font-style: italic;
+    margin-top: 5px;
+}
+
+#dial-handle {
+    position: absolute;
+    width: 4px;
+    height: 40px;
+    background: #fff;
+    top: 50%;
+    left: 50%;
+    transform-origin: bottom center;
+    transform: translate(-50%, -100%) rotate(0deg);
+    cursor: pointer;
+    z-index: 1;
+}

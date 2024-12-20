@@ -13,6 +13,10 @@ import { renderTerrain, renderClouds } from './terrain_renderer.js';
 import { FlyControls } from './FlyControls.js';
 import { updateLighting, 
          setTestMode } from './dayNightCycle.js';
+import { createGradientSky } from './GradientSky.js';
+import { isSimulationPlaying, updateUI } from './ui.js'; 
+import { getSimulatedTime } from './timeState.js';
+
 // import { FireFlies } from './utils/fire_fly/FireFly.ts';
 
 
@@ -26,8 +30,8 @@ const stats = Array.from({ length: 3 }, (_, i) => {
 });
 
 // Scene creation
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87CEEB);
+export const scene = new THREE.Scene();
+// scene.background = new THREE.Color(0x87CEEB);
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false}); // Allow transparent background
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -58,7 +62,10 @@ const fogDensity = Math.sqrt(-Math.log(0.0001) / Math.pow(8 * 16, 2));
 scene.fog = new THREE.FogExp2(0x87CEEB, fogDensity); 
 
 renderTerrain(scene);
-renderClouds(scene);
+const cloudGroup = renderClouds(scene);
+cloudGroup.position.set(0,0,0);
+
+let lastMinute = null; // track minute changes
 
 const controls = new FlyControls(camera, renderer.domElement);
 controls.movementSpeed = 20;
@@ -75,6 +82,9 @@ function countVertices() {
     });
     return vertexCount;
 }
+
+export const { skyMesh, skyMaterial } = createGradientSky(scene);
+
 
 // Initialize post-processing
 const composer = new EffectComposer(renderer);
@@ -105,7 +115,7 @@ window.addEventListener('resize', updateComposerSize);
 // Keyboard controls for testing the day-night cycle
 document.addEventListener('keydown', (event) => {
     const keyTimeMap = {
-        t: 6, // Dawn or Twilight
+        t: 5, // Dawn or Twilight
         y: 9, // Morning
         u: 13, // Afternoon
         i: 17, // Dusk
@@ -122,6 +132,10 @@ document.addEventListener('keydown', (event) => {
     }
 });
 
+export function updateLightingWithTime(time) {
+    updateLighting(scene, time);
+}
+
 
 /*const fireflies = new FireFlies(scene, {
     groupCount: 2,
@@ -130,6 +144,8 @@ document.addEventListener('keydown', (event) => {
     groupCenters: [new THREE.Vector3(0, 25, 0)]
 });*/
 
+const spreadDistance = 512;
+
 // Animation loop
 function animate() {
     
@@ -137,8 +153,35 @@ function animate() {
 
     requestAnimationFrame(animate);
 
-    updateLighting(scene, new Date());
+    let currentTime;
+
+    // Update lighting with local time if simulation is not playing
+    if (!isSimulationPlaying()) {
+        currentTime = new Date();
+        updateLighting(scene, currentTime);
+        updateUI(currentTime);
+    } else {
+        currentTime = getSimulatedTime();
+        updateLighting(scene); // otherwise just use simulatedTime
+        updateUI(currentTime);
+    }
+
+    skyMesh.position.copy(camera.position);
     // fireflies.update(0.008); // Update fireflies
+
+    // Move clouds after every minute
+    const currentMinute = currentTime.getMinutes();
+    if (lastMinute !== currentMinute) {
+        cloudGroup.position.x += 0.1;  //move clouds to the right
+        lastMinute = currentMinute;
+    }
+
+    // Move clouds back to original position after the position exceeds 1/2 the spreadDistance
+    if (cloudGroup.position.x > spreadDistance / 2) {
+        cloudGroup.position.x -= spreadDistance;
+    } else if (cloudGroup.position.x < -spreadDistance / 2) {
+        cloudGroup.position.x += spreadDistance;
+    }
 
     composer.render();    
 
