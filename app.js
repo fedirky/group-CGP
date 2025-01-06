@@ -16,6 +16,10 @@ import { updateLighting,
 import { createGradientSky } from './GradientSky.js';
 import { isSimulationPlaying, updateUI } from './ui.js'; 
 import { getSimulatedTime } from './timeState.js';
+import { loadHotAirBalloons, updateHotAirBalloons } from './hotAirBalloons.js';
+import { createFireflies, updateFireflies } from './fireFlies.js';
+import { createAurora, updateAurora } from './aurora.js';
+
 
 // import { FireFlies } from './utils/fire_fly/FireFly.ts';
 
@@ -84,7 +88,9 @@ function countVertices() {
 }
 
 export const { skyMesh, skyMaterial } = createGradientSky(scene);
-
+loadHotAirBalloons(scene);
+createFireflies(scene);
+createAurora(scene);
 
 // Initialize post-processing
 const composer = new EffectComposer(renderer);
@@ -182,6 +188,13 @@ function animate() {
     } else if (cloudGroup.position.x < -spreadDistance / 2) {
         cloudGroup.position.x += spreadDistance;
     }
+
+    // Fade balloons in and out based on time
+    updateHotAirBalloons(currentTime);
+
+    updateFireflies();
+
+    updateAurora();
 
     composer.render();    
 
