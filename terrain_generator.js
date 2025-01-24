@@ -4,8 +4,8 @@ const scale = 0.02;
 const heightMultiplier = 22;
 
 const chunkSize = 16;
-const numChunksX = 8;
-const numChunksZ = 8;
+const numChunksX = 12;
+const numChunksZ = 12;
 
 const chunks = {};
 
