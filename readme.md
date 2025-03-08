@@ -4,5 +4,6 @@ This project is a voxel engine created using the **Three.js** library. The main 
 
 To launch the project, rename the `settings_example.json` file to `settings.json`, adjust settings if needed, and run the project in Visual Studio.
 
-**Detailed explanation: https://courses.cs.ut.ee/2024/cg/fall/Main/Project-DynamicDayNightCycle**
+**Detailed explanation:** https://courses.cs.ut.ee/2024/cg/fall/Main/Project-DynamicDayNightCycle
+
 **Live Demo:** https://fedirky.github.io/group-CGP/
