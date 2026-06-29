@@ -206,6 +206,53 @@ export function updateLightingWithTime(time) {
 }
 
 
+// --- Settings / pause menu (opens on Escape, lets you pick a movement mode) ---
+const settingsMenu = document.getElementById('settings-menu');
+const modeButtons = document.querySelectorAll('.mode-button');
+const resumeButton = document.getElementById('resume-button');
+let hasPlayed = false; // only show the menu after the player has started
+
+function refreshModeButtons() {
+    modeButtons.forEach((button) => {
+        button.classList.toggle('active', button.dataset.mode === controls.mode);
+    });
+}
+
+function showSettingsMenu() {
+    refreshModeButtons();
+    settingsMenu.classList.add('visible');
+}
+
+function hideSettingsMenu() {
+    settingsMenu.classList.remove('visible');
+}
+
+modeButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+        controls.setMode(button.dataset.mode);
+        refreshModeButtons();
+        console.log(`Movement mode: ${controls.mode}`);
+        controls.lock(); // re-enter the world
+    });
+});
+
+resumeButton.addEventListener('click', () => {
+    controls.lock();
+});
+
+// Pointer lock drives menu visibility: locked = playing, unlocked = menu open.
+document.addEventListener('pointerlockchange', () => {
+    if (document.pointerLockElement === renderer.domElement) {
+        hasPlayed = true;
+        hideSettingsMenu();
+    } else if (hasPlayed) {
+        showSettingsMenu();
+    }
+});
+
+refreshModeButtons();
+
+
 /*const fireflies = new FireFlies(scene, {
     groupCount: 2,
     firefliesPerGroup: 250,

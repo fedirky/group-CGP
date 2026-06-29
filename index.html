@@ -15,6 +15,19 @@
     <script src="https://threejs.org/examples/js/loaders/FontLoader.js"></script>
     <script type="module" src="./app.js"></script>
 
+    <!-- Settings / pause menu (opens on Escape) -->
+    <div id="settings-menu">
+        <div id="settings-panel">
+            <h2>Налаштування</h2>
+            <p class="settings-hint">Режим пересування</p>
+            <div id="mode-buttons">
+                <button class="mode-button" data-mode="fly">Політ</button>
+                <button class="mode-button" data-mode="walk">Ходьба</button>
+            </div>
+            <button id="resume-button">Продовжити</button>
+        </div>
+    </div>
+
     <!-- Day-Night Cycle Widget Container -->
     <div id="day-night-widget">
         <div id="clock-widget">

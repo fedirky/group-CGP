@@ -97,6 +97,85 @@
     margin-top: 5px;
 }
 
+#settings-menu {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+    font-family: sans-serif;
+}
+
+#settings-menu.visible {
+    display: flex;
+}
+
+#settings-panel {
+    background: rgba(20, 20, 20, 0.92);
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    padding: 28px 32px;
+    text-align: center;
+    color: #fff;
+    min-width: 260px;
+}
+
+#settings-panel h2 {
+    margin: 0 0 18px;
+    font-size: 22px;
+}
+
+.settings-hint {
+    margin: 0 0 10px;
+    font-size: 13px;
+    opacity: 0.7;
+}
+
+#mode-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.mode-button {
+    flex: 1;
+    padding: 12px 16px;
+    font-size: 15px;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.mode-button:hover {
+    background: rgba(255, 255, 255, 0.18);
+}
+
+.mode-button.active {
+    background: #4a8c3f;
+    border-color: #6fd05c;
+}
+
+#resume-button {
+    width: 100%;
+    padding: 12px;
+    font-size: 15px;
+    color: #000;
+    background: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+#resume-button:hover {
+    background: #e0e0e0;
+}
+
 #dial-handle {
     position: absolute;
     width: 4px;
