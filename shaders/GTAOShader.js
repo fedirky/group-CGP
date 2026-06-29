@@ -13,14 +13,6 @@ import {
  *   - https://github.com/Patapom/GodComplex/blob/master/Tests/TestHBIL/2018%20Mayaux%20-%20Horizon-Based%20Indirect%20Lighting%20(HBIL).pdf
  *
  * - other AO algorithms that are not implemented here:
- *   - Screen Space Ambient Occlusion (SSAO), see also SSAOShader.js
- *	 - http://john-chapman-graphics.blogspot.com/2013/01/ssao-tutorial.html
- *	 - https://learnopengl.com/Advanced-Lighting/SSAO
- *	 - https://creativecoding.soe.ucsc.edu/courses/cmpm164/_schedule/AmbientOcclusion.pdf
- *	 - https://drive.google.com/file/d/1SyagcEVplIm2KkRD3WQYSO9O0Iyi1hfy/edit
- *   - Scalable Ambient Occlusion (SAO), see also SAOShader.js
- *	 - https://casual-effects.com/research/McGuire2012SAO/index.html
- *	   - https://research.nvidia.com/sites/default/files/pubs/2012-06_Scalable-Ambient-Obscurance/McGuire12SAO.pdf
  *   - N8HO
  *	 - https://github.com/N8python/n8ao
  *   - Horizon Based Ambient Occlusion (HBAO)

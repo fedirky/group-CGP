@@ -19,6 +19,7 @@ import { getSimulatedTime } from './timeState.js';
 import { loadHotAirBalloons, updateHotAirBalloons } from './hotAirBalloons.js';
 import { createFireflies, updateFireflies } from './fireFlies.js';
 import { createAurora, updateAurora } from './aurora.js';
+import { toggleAO } from './voxelAO.js';
 
 
 // import { FireFlies } from './utils/fire_fly/FireFly.ts';
@@ -76,6 +77,12 @@ const controls = new MinecraftControls(camera, renderer.domElement);
 controls.movementSpeed = 16;
 controls.lookSpeed = 0.0022;
 
+const whiteTextureData = new Uint8Array([255, 255, 255, 255]);
+const whiteDebugTexture = new THREE.DataTexture(whiteTextureData, 1, 1);
+whiteDebugTexture.colorSpace = THREE.SRGBColorSpace;
+whiteDebugTexture.needsUpdate = true;
+let whiteTextureDebugEnabled = false;
+
 function countVertices() {
     let vertexCount = 0;
     scene.traverse((object) => {
@@ -84,6 +91,57 @@ function countVertices() {
         }
     });
     return vertexCount;
+}
+
+function setWhiteTextureDebug(enabled) {
+    whiteTextureDebugEnabled = enabled;
+
+    scene.traverse((object) => {
+        if (!object.material) return;
+
+        const objectMaterials = Array.isArray(object.material) ? object.material : [object.material];
+
+        objectMaterials.forEach((material) => {
+            if (!material) return;
+
+            if (!material.userData.whiteTextureDebugOriginal) {
+                material.userData.whiteTextureDebugOriginal = {
+                    map: material.map || null,
+                    bumpMap: material.bumpMap || null,
+                    normalMap: material.normalMap || null,
+                    roughnessMap: material.roughnessMap || null,
+                    metalnessMap: material.metalnessMap || null,
+                    emissiveMap: material.emissiveMap || null,
+                    color: material.color ? material.color.clone() : null,
+                    emissive: material.emissive ? material.emissive.clone() : null,
+                };
+            }
+
+            const original = material.userData.whiteTextureDebugOriginal;
+
+            if (enabled) {
+                if ('map' in material) material.map = whiteDebugTexture;
+                if ('bumpMap' in material) material.bumpMap = null;
+                if ('normalMap' in material) material.normalMap = null;
+                if ('roughnessMap' in material) material.roughnessMap = null;
+                if ('metalnessMap' in material) material.metalnessMap = null;
+                if ('emissiveMap' in material) material.emissiveMap = null;
+                if (material.color) material.color.set(0xffffff);
+                if (material.emissive) material.emissive.set(0x000000);
+            } else {
+                if ('map' in material) material.map = original.map;
+                if ('bumpMap' in material) material.bumpMap = original.bumpMap;
+                if ('normalMap' in material) material.normalMap = original.normalMap;
+                if ('roughnessMap' in material) material.roughnessMap = original.roughnessMap;
+                if ('metalnessMap' in material) material.metalnessMap = original.metalnessMap;
+                if ('emissiveMap' in material) material.emissiveMap = original.emissiveMap;
+                if (material.color && original.color) material.color.copy(original.color);
+                if (material.emissive && original.emissive) material.emissive.copy(original.emissive);
+            }
+
+            material.needsUpdate = true;
+        });
+    });
 }
 
 export const { skyMesh, skyMaterial } = createGradientSky(scene);
@@ -134,6 +192,12 @@ document.addEventListener('keydown', (event) => {
     } else if (event.key === 'l') {
         setTestMode(false);
         console.log('Test Mode Disabled: Using Real Time');
+    } else if (event.key === 'v' || event.key === 'V') {
+        const enabled = toggleAO();
+        console.log(`Ambient Occlusion: ${enabled ? 'ON' : 'OFF'}`);
+    } else if (event.key === 'b' || event.key === 'B') {
+        setWhiteTextureDebug(!whiteTextureDebugEnabled);
+        console.log(`White texture debug: ${whiteTextureDebugEnabled ? 'ON' : 'OFF'}`);
     }
 });
 

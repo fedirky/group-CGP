@@ -2,6 +2,8 @@ import * as THREE from './three.r168.module.js';
 
 import { getChunk } from './terrain_generator.js';
 
+import { computeFaceAO, patchMaterialWithAO, attachAOAttribute } from './voxelAO.js';
+
 
 const textures = `./resources/texturepacks/default`;
 const numChunksX = 8;
@@ -120,6 +122,8 @@ function getBlockMaterial(block, isTopFace = false) {
         } else {
             materials[textureKey] = new THREE.MeshLambertMaterial(materialConfig);
         }
+
+        patchMaterialWithAO(materials[textureKey]);
     }
 
     return materials[textureKey];
@@ -255,7 +259,7 @@ function renderChunk(scene, chunkX, chunkZ) {
     const chunkData = getChunk(chunkX, chunkZ);
     const tempMatrix = new THREE.Matrix4();
 
-    const renderFace = (block, posX, posY, posZ, offset, rotation, isTopFace) => {
+    const renderFace = (block, posX, posY, posZ, offset, rotation, isTopFace, direction) => {
         const materialKey = block === 'grass' && isTopFace ? 'grass_top' : block;
         const material = getBlockMaterial(block, isTopFace);
         const instancedMeshes = getInstancedMeshesForMaterial(materialKey);
@@ -263,6 +267,7 @@ function renderChunk(scene, chunkX, chunkZ) {
 
         if (!instancedMesh || instancedMesh.count >= maxInstancesPerMesh) {
             const geometry = new THREE.PlaneGeometry(cubeSize, cubeSize);
+            attachAOAttribute(geometry, maxInstancesPerMesh);
             instancedMesh = new THREE.InstancedMesh(geometry, material, maxInstancesPerMesh);
             instancedMesh.count = 0;
             instancedMeshes.push(instancedMesh);
@@ -278,7 +283,17 @@ function renderChunk(scene, chunkX, chunkZ) {
             new THREE.Quaternion().setFromEuler(new THREE.Euler(...rotation)),
             new THREE.Vector3(1, 1, 1)
         );
-        instancedMesh.setMatrixAt(instancedMesh.count++, tempMatrix);
+
+        const idx = instancedMesh.count;
+
+        // Bake per-vertex ambient occlusion from the neighbouring voxels.
+        const ao = computeFaceAO(direction, Math.round(posX), Math.round(posY), Math.round(posZ));
+        const aoAttr = instancedMesh.geometry.getAttribute('aoCorners');
+        aoAttr.setXYZW(idx, ao[0], ao[1], ao[2], ao[3]);
+        aoAttr.needsUpdate = true;
+
+        instancedMesh.setMatrixAt(idx, tempMatrix);
+        instancedMesh.count++;
     };
 
     chunkData.forEach((column, x) => {
@@ -371,13 +386,13 @@ function renderChunk(scene, chunkX, chunkZ) {
                                           (alignedBlock === 'air' || alignedBlock.startsWith('flower_'));
 
                         if (block === 'water' && isTopFace && isExposed) {
-                            renderFace(block, posX, posY - cubeSize / 8, posZ, offset, rotation, true);
+                            renderFace(block, posX, posY - cubeSize / 8, posZ, offset, rotation, true, direction);
                         } else if (block !== 'water' && (isExposed || neighborBlock === 'water' || alignedBlock === 'water')) {
-                            renderFace(block, posX, posY, posZ, offset, rotation, isTopFace);
+                            renderFace(block, posX, posY, posZ, offset, rotation, isTopFace, direction);
                         }
                     });
                 } else {
-                    neighbors.forEach(({ offset, rotation, isTopFace }) => {
+                    neighbors.forEach(({ offset, rotation, isTopFace, direction }) => {
                         const [nx, ny, nz] = [x + offset[0], y + offset[1], z + offset[2]];
 
                         const neighborBlock =
@@ -390,9 +405,9 @@ function renderChunk(scene, chunkX, chunkZ) {
                         const isExposed = neighborBlock === 'air' || neighborBlock.startsWith('flower_');
 
                         if (block === 'water' && isTopFace && isExposed) {
-                            renderFace(block, posX, posY - cubeSize / 8, posZ, offset, rotation, true);
+                            renderFace(block, posX, posY - cubeSize / 8, posZ, offset, rotation, true, direction);
                         } else if (block !== 'water' && (isExposed || neighborBlock === 'water')) {
-                            renderFace(block, posX, posY, posZ, offset, rotation, isTopFace);
+                            renderFace(block, posX, posY, posZ, offset, rotation, isTopFace, direction);
                         }
                     });
                 }
