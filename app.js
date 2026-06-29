@@ -10,7 +10,7 @@ import { FXAAShader } from './shaders/FXAAShader.js';
 
 import { renderTerrain, renderClouds } from './terrain_renderer.js';
 
-import { FlyControls } from './FlyControls.js';
+import { MinecraftControls } from './MinecraftControls.js';
 import { updateLighting, 
          setTestMode } from './dayNightCycle.js';
 import { createGradientSky } from './GradientSky.js';
@@ -71,11 +71,10 @@ cloudGroup.position.set(0,0,0);
 
 let lastMinute = null; // track minute changes
 
-const controls = new FlyControls(camera, renderer.domElement);
-controls.movementSpeed = 20;
-controls.rollSpeed = 0.7;
-controls.autoForward = false;
-controls.dragToLook = true;
+const clock = new THREE.Clock();
+const controls = new MinecraftControls(camera, renderer.domElement);
+controls.movementSpeed = 16;
+controls.lookSpeed = 0.0022;
 
 function countVertices() {
     let vertexCount = 0;
@@ -158,6 +157,8 @@ function animate() {
     stats.forEach(stat => stat.begin());
 
     requestAnimationFrame(animate);
+    const delta = Math.min(clock.getDelta(), 0.05);
+    controls.update(delta);
 
     let currentTime;
 
@@ -199,8 +200,6 @@ function animate() {
     composer.render();    
 
     stats.forEach(stat => stat.end());
-
-    controls.update(0.01);
 }
 
 animate();
