@@ -40,6 +40,35 @@ const AO_SCRATCH = new Float32Array(4);
 // the whole world. 1.0 = AO on, 0.0 = AO off.
 export const aoUniforms = { uAOEnabled: { value: 1.0 } };
 
+// Shared toggle for the deferred albedo pass. When 1.0, a patched material
+// outputs its raw (linear) surface albedo instead of its lit colour, so the
+// point-light composite can reveal the texture. 0.0 during normal rendering.
+export const albedoUniforms = { uAlbedoPass: { value: 0.0 } };
+
+/**
+ * Make a compiled standard-material shader able to emit raw albedo in the
+ * deferred albedo pass. Reused by every ground material (atlas blocks, special
+ * blocks, flowers) so they all light up their texture identically.
+ */
+export function injectAlbedoOutput(shader) {
+    shader.uniforms.uAlbedoPass = albedoUniforms.uAlbedoPass;
+    shader.fragmentShader = 'uniform float uAlbedoPass;\n' + shader.fragmentShader;
+    // Output raw albedo right after alphaTest and bail out — this skips all the
+    // lighting/bump/emissive/fog work in the albedo pass (uAlbedoPass is a uniform,
+    // so the whole draw takes the cheap branch).
+    shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <alphatest_fragment>',
+        `#include <alphatest_fragment>
+        if (uAlbedoPass > 0.5) { gl_FragColor = vec4(diffuseColor.rgb, 1.0); return; }`
+    );
+}
+
+/** Patch a material that has no other onBeforeCompile (e.g. flowers). */
+export function patchAlbedoOutput(material) {
+    material.onBeforeCompile = (shader) => injectAlbedoOutput(shader);
+    return material;
+}
+
 /** Enable or disable ambient occlusion at runtime. */
 export function setAOEnabled(enabled) {
     aoUniforms.uAOEnabled.value = enabled ? 1.0 : 0.0;
@@ -160,6 +189,8 @@ export function patchMaterialWithAO(material) {
             `#include <color_fragment>
             diffuseColor.rgb *= mix(1.0, vAoShade, uAOEnabled);`
         );
+
+        injectAlbedoOutput(shader); // also emit albedo in the deferred albedo pass
     };
 
     return material;

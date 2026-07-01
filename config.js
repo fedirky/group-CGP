@@ -15,7 +15,7 @@ export const WATER_CONFIG = {
 export const RENDER_CONFIG = {
     defaultRenderDistance: 6,
     buildBudget: 2,
-    maxActiveLights: 6,
+    lightCapacity: 512, // initial deferred point-light capacity (grows automatically)
 };
 
 export const PLAYER_CONFIG = {

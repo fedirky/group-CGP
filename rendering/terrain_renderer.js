@@ -2,10 +2,11 @@ import * as THREE from '../three.r168.module.js';
 
 import { getChunk, ensureChunkFeatures } from '../world/terrain_generator.js';
 
-import { computeFaceAO, patchMaterialWithAO } from '../voxelAO.js';
+import { computeFaceAO, patchMaterialWithAO, patchAlbedoOutput } from '../voxelAO.js';
 
-import { getLayer, getAtlasMaterial } from './blockAtlas.js';
+import { getLayer, getAtlasMaterial, ATLAS_ALBEDO_LAYER } from './blockAtlas.js';
 import { patchWaterShader } from './shaders/WaterShader.js';
+import { createLight, removeLight } from './deferredLights.js';
 import { RENDER_CONFIG, WATER_CONFIG, WORLD_CONFIG } from '../config.js';
 
 
@@ -19,15 +20,10 @@ const materials = {};
 // Per-chunk render data. Each chunk bakes ONE merged BufferGeometry per material
 // (a single draw call, tightly sized) instead of thousands of InstancedMesh
 // faces — far less memory churn and GPU upload, which is what makes streaming
-// smooth. chunkMeshes["cx,cz"] = { meshes: [Mesh, ...], lights: [PointLight, ...] }
+// smooth. chunkMeshes["cx,cz"] = { meshes: [Mesh, ...], lights: [lightHandle, ...] }
 const chunkMeshes = {};
 
 const chunkKey = (cx, cz) => `${cx},${cz}`;
-
-// All glowing point lights currently in the world. Forward rendering evaluates
-// every visible light per fragment, so we keep only the nearest few active.
-const _allLights = [];
-const MAX_ACTIVE_LIGHTS = RENDER_CONFIG.maxActiveLights;
 
 
 // --- Precomputed face quads --------------------------------------------------
@@ -311,6 +307,9 @@ function createFlowerPlaneMaterial(flowerType) {
             });
 
         }
+
+        // Let flowers/grass reveal their texture under deferred point lights too.
+        patchAlbedoOutput(materials[flowerType]);
     }
     return materials[flowerType];
 }
@@ -534,12 +533,11 @@ function renderChunk(scene, chunkX, chunkZ) {
                     const colorHex = `#${parts[parts.length - 2]}`;
                     const intensity = parseFloat(parts[parts.length - 1]);
                     if (intensity && colorHex) {
-                        const light = new THREE.PointLight(new THREE.Color(colorHex), intensity, 5);
-                        light.position.set(baseX + x, y, baseZ + z);
-                        light.visible = false; // updateLights() decides which are active
-                        scene.add(light);
-                        lights.push(light);
-                        _allLights.push(light);
+                        // A deferred light volume — cheap and unlimited (see deferredLights.js).
+                        lights.push(createLight({
+                            x: baseX + x, y, z: baseZ + z,
+                            color: colorHex, intensity, radius: 5,
+                        }));
                     }
                 }
 
@@ -566,15 +564,21 @@ function renderChunk(scene, chunkX, chunkZ) {
     }
 
     const meshes = [];
-    const pushMesh = (b) => {
+    const pushMesh = (b, albedo) => {
         const mesh = finalizeBuilder(b);
-        if (mesh) { scene.add(mesh); meshes.push(mesh); }
+        if (mesh) {
+            // Tag ground meshes so the deferred albedo pass renders them (their
+            // materials emit albedo there). Water is excluded on purpose.
+            if (albedo) mesh.layers.enable(ATLAS_ALBEDO_LAYER);
+            scene.add(mesh);
+            meshes.push(mesh);
+        }
     };
 
-    if (atlasBuilder) pushMesh(atlasBuilder);          // one draw call for all atlased blocks
-    for (const k in builders) pushMesh(builders[k]);   // special blocks (ice/gold/berry)
-    for (const k in flowerBuilders) pushMesh(flowerBuilders[k]);
-    if (waterBuilder) pushMesh(waterBuilder);          // transparent water last
+    if (atlasBuilder) pushMesh(atlasBuilder, true);           // all atlased blocks
+    for (const k in builders) pushMesh(builders[k], true);    // special blocks (ice/gold/berry)
+    for (const k in flowerBuilders) pushMesh(flowerBuilders[k], true); // flowers/grass
+    if (waterBuilder) pushMesh(waterBuilder);                 // transparent water last (no albedo)
 
     chunkMeshes[chunkKey(chunkX, chunkZ)] = { meshes, lights };
 }
@@ -591,11 +595,7 @@ function clearChunk(scene, chunkX, chunkZ) {
         scene.remove(mesh);
         if (mesh.geometry) mesh.geometry.dispose();
     });
-    entry.lights.forEach((light) => {
-        scene.remove(light);
-        const i = _allLights.indexOf(light);
-        if (i !== -1) _allLights.splice(i, 1);
-    });
+    entry.lights.forEach((handle) => removeLight(handle));
 
     delete chunkMeshes[key];
 }
@@ -612,23 +612,6 @@ export function rebuildChunk(scene, chunkX, chunkZ) {
 
 const _dirtyChunks = new Set(); // built chunks that need rebuilding (e.g. tree spill)
 const BUILD_BUDGET = RENDER_CONFIG.buildBudget; // max chunk meshes built per update (avoids hitches)
-
-// Keep only the nearest MAX_ACTIVE_LIGHTS point lights visible. The visible
-// count stays constant once enough lights exist, so the shader isn't recompiled.
-export function updateLights(camX, camY, camZ) {
-    const n = _allLights.length;
-    if (n <= MAX_ACTIVE_LIGHTS) {
-        for (let i = 0; i < n; i++) _allLights[i].visible = true;
-        return;
-    }
-    for (let i = 0; i < n; i++) {
-        const p = _allLights[i].position;
-        const dx = p.x - camX, dy = p.y - camY, dz = p.z - camZ;
-        _allLights[i]._dist = dx * dx + dy * dy + dz * dz;
-    }
-    _allLights.sort((a, b) => a._dist - b._dist);
-    for (let i = 0; i < n; i++) _allLights[i].visible = i < MAX_ACTIVE_LIGHTS;
-}
 
 function markNeighboursDirty(fx, fz) {
     for (let dx = -1; dx <= 1; dx++) {
