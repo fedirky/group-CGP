@@ -40,32 +40,39 @@ const AO_SCRATCH = new Float32Array(4);
 // the whole world. 1.0 = AO on, 0.0 = AO off.
 export const aoUniforms = { uAOEnabled: { value: 1.0 } };
 
-// Shared toggle for the deferred albedo pass. When 1.0, a patched material
-// outputs its raw (linear) surface albedo instead of its lit colour, so the
-// point-light composite can reveal the texture. 0.0 during normal rendering.
-export const albedoUniforms = { uAlbedoPass: { value: 0.0 } };
+// Overall strength of baked block light (berries). Higher = brighter pools.
+const BLOCK_LIGHT_STRENGTH = 1.8;
 
 /**
- * Make a compiled standard-material shader able to emit raw albedo in the
- * deferred albedo pass. Reused by every ground material (atlas blocks, special
- * blocks, flowers) so they all light up their texture identically.
+ * Add baked per-vertex block light to a compiled standard-material shader:
+ * reads a `blockLight` vertex attribute (RGB, 0..1) and adds `albedo * light`
+ * to the lit result, so glowing blocks reveal the surface texture even in the
+ * dark. Reused by every ground material (atlas, special blocks, flowers, water).
  */
-export function injectAlbedoOutput(shader) {
-    shader.uniforms.uAlbedoPass = albedoUniforms.uAlbedoPass;
-    shader.fragmentShader = 'uniform float uAlbedoPass;\n' + shader.fragmentShader;
-    // Output raw albedo right after alphaTest and bail out — this skips all the
-    // lighting/bump/emissive/fog work in the albedo pass (uAlbedoPass is a uniform,
-    // so the whole draw takes the cheap branch).
+export function injectBlockLight(shader) {
+    shader.vertexShader = `
+        attribute vec3 blockLight;
+        varying vec3 vBlockLight;
+    ` + shader.vertexShader;
+
+    shader.vertexShader = shader.vertexShader.replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        vBlockLight = blockLight;`
+    );
+
+    shader.fragmentShader = 'varying vec3 vBlockLight;\n' + shader.fragmentShader;
+
     shader.fragmentShader = shader.fragmentShader.replace(
-        '#include <alphatest_fragment>',
-        `#include <alphatest_fragment>
-        if (uAlbedoPass > 0.5) { gl_FragColor = vec4(diffuseColor.rgb, 1.0); return; }`
+        '#include <opaque_fragment>',
+        `outgoingLight += diffuseColor.rgb * vBlockLight * ${BLOCK_LIGHT_STRENGTH.toFixed(3)};
+        #include <opaque_fragment>`
     );
 }
 
 /** Patch a material that has no other onBeforeCompile (e.g. flowers). */
-export function patchAlbedoOutput(material) {
-    material.onBeforeCompile = (shader) => injectAlbedoOutput(shader);
+export function patchBlockLight(material) {
+    material.onBeforeCompile = (shader) => injectBlockLight(shader);
     return material;
 }
 
@@ -103,7 +110,8 @@ const FACES = {
 
 // Precompute, for every face direction and every corner, the integer offsets
 // (relative to the owning block) of the side1, side2 and corner voxels.
-const AO_OFFSETS = {};
+// Exported so the renderer can reuse them for smooth per-vertex block light.
+export const AO_OFFSETS = {};
 
 (function buildOffsets() {
     const mat = new THREE.Matrix4();
@@ -190,7 +198,7 @@ export function patchMaterialWithAO(material) {
             diffuseColor.rgb *= mix(1.0, vAoShade, uAOEnabled);`
         );
 
-        injectAlbedoOutput(shader); // also emit albedo in the deferred albedo pass
+        injectBlockLight(shader); // baked berry light
     };
 
     return material;

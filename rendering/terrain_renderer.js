@@ -2,11 +2,11 @@ import * as THREE from '../three.r168.module.js';
 
 import { getChunk, ensureChunkFeatures } from '../world/terrain_generator.js';
 
-import { computeFaceAO, patchMaterialWithAO, patchAlbedoOutput } from '../voxelAO.js';
+import { computeFaceAO, patchMaterialWithAO, patchBlockLight, AO_OFFSETS } from '../voxelAO.js';
 
-import { getLayer, getAtlasMaterial, ATLAS_ALBEDO_LAYER } from './blockAtlas.js';
+import { getLayer, getAtlasMaterial } from './blockAtlas.js';
 import { patchWaterShader } from './shaders/WaterShader.js';
-import { createLight, removeLight } from './deferredLights.js';
+import { computeChunkLight } from '../world/blockLight.js';
 import { RENDER_CONFIG, WATER_CONFIG, WORLD_CONFIG } from '../config.js';
 
 
@@ -20,7 +20,7 @@ const materials = {};
 // Per-chunk render data. Each chunk bakes ONE merged BufferGeometry per material
 // (a single draw call, tightly sized) instead of thousands of InstancedMesh
 // faces — far less memory churn and GPU upload, which is what makes streaming
-// smooth. chunkMeshes["cx,cz"] = { meshes: [Mesh, ...], lights: [lightHandle, ...] }
+// smooth. chunkMeshes["cx,cz"] = { meshes: [Mesh, ...] }
 const chunkMeshes = {};
 
 const chunkKey = (cx, cz) => `${cx},${cz}`;
@@ -79,6 +79,7 @@ const WATER_PATH_BLUR_FALLOFF = WATER_CONFIG.pathBlurFalloff;
 function newBuilder(material, withAO, withLayer, withWater) {
     return {
         pos: [], norm: [], uv: [],
+        light: [],                     // baked per-vertex block light (RGB)
         shade: withAO ? [] : null,
         layer: withLayer ? [] : null,
         wpath: withWater ? [] : null, // center water depth used for ray path length
@@ -86,9 +87,38 @@ function newBuilder(material, withAO, withLayer, withWater) {
     };
 }
 
+// Push one RGB block light onto all 4 vertices (flat; used for flowers).
+function pushLight(b, light) {
+    for (let k = 0; k < 4; k++) b.light.push(light[0], light[1], light[2]);
+}
+
+// Push a distinct RGB per vertex (smooth block light on block/water faces).
+function pushLight4(b, l4) {
+    for (let k = 0; k < 4; k++) b.light.push(l4[k][0], l4[k][1], l4[k][2]);
+}
+
+// Smooth per-vertex block light: for each face corner, average the four air-side
+// cells meeting at it (bilinear -> no hard per-cell steps). (bx,by,bz) = block
+// integer world coords; the air side is at +normal.
+const _l4 = [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]];
+function faceLight4(lightField, bx, by, bz, direction) {
+    const n = FACE_QUADS[direction].normal;
+    const table = AO_OFFSETS[direction];
+    for (let k = 0; k < 4; k++) {
+        const o = table[k];
+        let r = 0, g = 0, bl = 0;
+        let L = lightField.at(bx + n[0], by + n[1], bz + n[2]); r += L[0]; g += L[1]; bl += L[2];
+        L = lightField.at(bx + o.s1[0], by + o.s1[1], bz + o.s1[2]); r += L[0]; g += L[1]; bl += L[2];
+        L = lightField.at(bx + o.s2[0], by + o.s2[1], bz + o.s2[2]); r += L[0]; g += L[1]; bl += L[2];
+        L = lightField.at(bx + o.c[0], by + o.c[1], bz + o.c[2]); r += L[0]; g += L[1]; bl += L[2];
+        _l4[k][0] = r * 0.25; _l4[k][1] = g * 0.25; _l4[k][2] = bl * 0.25;
+    }
+    return _l4;
+}
+
 // Append one water face (simple quad). The shader derives both colour and
 // opacity from the interpolated view-ray path length.
-function addWaterFace(b, dir, x, y, z, paths) {
+function addWaterFace(b, dir, x, y, z, paths, light4) {
     const q = FACE_QUADS[dir];
     const base = b.vcount;
     for (let k = 0; k < 4; k++) {
@@ -98,13 +128,14 @@ function addWaterFace(b, dir, x, y, z, paths) {
         b.uv.push(q.uvs[k][0], q.uvs[k][1]);
         b.wpath.push(paths[k]);
     }
+    pushLight4(b, light4);
     b.vcount += 4;
     b.idx.push(base, base + 2, base + 1, base + 2, base + 3, base + 1);
 }
 
 // Append one block face (with per-corner AO, optional atlas layer, and the
 // anisotropy-avoiding triangulation flip).
-function addFace(b, dir, x, y, z, ao, layer) {
+function addFace(b, dir, x, y, z, ao, layer, light4) {
     const q = FACE_QUADS[dir];
     const base = b.vcount;
     for (let k = 0; k < 4; k++) {
@@ -115,6 +146,7 @@ function addFace(b, dir, x, y, z, ao, layer) {
         b.shade.push(ao[k]);
         if (b.layer) b.layer.push(layer);
     }
+    pushLight4(b, light4);
     b.vcount += 4;
     // Split along the brighter diagonal so a dark corner doesn't bleed across.
     if (ao[0] + ao[3] > ao[1] + ao[2]) {
@@ -129,7 +161,7 @@ const _qm = new THREE.Matrix4();
 const _qe = new THREE.Euler();
 const _qv = new THREE.Vector3();
 const _qn = new THREE.Vector3();
-function addQuad(b, px, py, pz, ex, ey, ez) {
+function addQuad(b, px, py, pz, ex, ey, ez, light) {
     _qm.makeRotationFromEuler(_qe.set(ex, ey, ez));
     const base = b.vcount;
     for (let k = 0; k < 4; k++) {
@@ -140,6 +172,7 @@ function addQuad(b, px, py, pz, ex, ey, ez) {
         b.norm.push(_qn.x, _qn.y, _qn.z);
         b.uv.push(_PLANE[k].uv[0], _PLANE[k].uv[1]);
     }
+    pushLight(b, light);
     b.vcount += 4;
     b.idx.push(base, base + 2, base + 1, base + 2, base + 3, base + 1);
 }
@@ -152,6 +185,7 @@ function finalizeBuilder(b) {
     g.setAttribute('position', new THREE.Float32BufferAttribute(b.pos, 3));
     g.setAttribute('normal', new THREE.Float32BufferAttribute(b.norm, 3));
     if (b.uv.length) g.setAttribute('uv', new THREE.Float32BufferAttribute(b.uv, 2));
+    g.setAttribute('blockLight', new THREE.Float32BufferAttribute(b.light, 3));
     if (b.shade) g.setAttribute('aoShade', new THREE.Float32BufferAttribute(b.shade, 1));
     if (b.layer) g.setAttribute('layer', new THREE.Float32BufferAttribute(b.layer, 1));
     if (b.wpath) g.setAttribute('wpath', new THREE.Float32BufferAttribute(b.wpath, 1));
@@ -308,8 +342,8 @@ function createFlowerPlaneMaterial(flowerType) {
 
         }
 
-        // Let flowers/grass reveal their texture under deferred point lights too.
-        patchAlbedoOutput(materials[flowerType]);
+        // Flowers/grass receive baked berry light too.
+        patchBlockLight(materials[flowerType]);
     }
     return materials[flowerType];
 }
@@ -336,19 +370,19 @@ function hashUnit(x, y, z, salt) {
 
 // Bake a flower's billboard quads into a merged geometry builder. Offsets are
 // deterministic (hash-based) so they stay put when a chunk is rebuilt.
-function addFlower(b, posX, posY, posZ, flowerType) {
+function addFlower(b, posX, posY, posZ, flowerType, light) {
     if (flowerType === 'flower_lily') {
         // Lily: flat, horizontal, with a deterministic 90° rotation.
         const rotationZ = (Math.floor(hashUnit(posX, posY, posZ, 0) * 3) + 1) * Math.PI / 2;
-        addQuad(b, posX, posY - 0.62, posZ, -Math.PI / 2, 0, rotationZ);
+        addQuad(b, posX, posY - 0.62, posZ, -Math.PI / 2, 0, rotationZ, light);
     } else {
         let shiftX = (Math.floor(hashUnit(posX, posY, posZ, 1) * 3) - 1) / 16;
         let shiftZ = (Math.floor(hashUnit(posX, posY, posZ, 2) * 3) - 1) / 16;
         if (flowerType === 'flower_sugar_cane') { shiftX = 0; shiftZ = 0; }
 
         // Two crossed planes.
-        addQuad(b, posX + shiftX, posY, posZ + shiftZ, 0, -Math.PI / 4, 0);
-        addQuad(b, posX + shiftX, posY, posZ + shiftZ, 0, Math.PI / 4, 0);
+        addQuad(b, posX + shiftX, posY, posZ + shiftZ, 0, -Math.PI / 4, 0, light);
+        addQuad(b, posX + shiftX, posY, posZ + shiftZ, 0, Math.PI / 4, 0, light);
     }
 }
 
@@ -399,11 +433,13 @@ function renderChunk(scene, chunkX, chunkZ) {
     const baseX = chunkX * CHUNK_SIZE;
     const baseZ = chunkZ * CHUNK_SIZE;
 
+    // Baked block-light field for this chunk (seeded from nearby glowing blocks).
+    const lightField = computeChunkLight(chunkX, chunkZ);
+
     // One merged-geometry builder per material in this chunk. Atlased blocks all
     // share a single builder (one draw call); special/water blocks keep their own.
     const builders = {};       // materialKey -> block builder (with AO)
     const flowerBuilders = {}; // flowerType  -> flower builder (no AO)
-    const lights = [];
     let atlasBuilder = null;
     let waterBuilder = null;
 
@@ -499,8 +535,11 @@ function renderChunk(scene, chunkX, chunkZ) {
     const emitFace = (block, lx, ly, lz, isTopFace, direction, yShift) => {
         const wx = baseX + lx, wy = ly + yShift, wz = baseZ + lz;
 
+        // Smooth per-vertex block light for this face.
+        const light4 = faceLight4(lightField, baseX + lx, ly, baseZ + lz, direction);
+
         if (block === 'water') {
-            addWaterFace(getWaterBuilder(), direction, wx, wy, wz, waterPathCorners(lx, lz, ly));
+            addWaterFace(getWaterBuilder(), direction, wx, wy, wz, waterPathCorners(lx, lz, ly), light4);
             return;
         }
 
@@ -508,9 +547,9 @@ function renderChunk(scene, chunkX, chunkZ) {
         const ao = computeFaceAO(direction, lx, ly, lz, isOcc);
         const layer = getLayer(materialKey);
         if (layer >= 0) {
-            addFace(getAtlasBuilder(), direction, wx, wy, wz, ao, layer);
+            addFace(getAtlasBuilder(), direction, wx, wy, wz, ao, layer, light4);
         } else {
-            addFace(getBuilder(materialKey, block, isTopFace), direction, wx, wy, wz, ao);
+            addFace(getBuilder(materialKey, block, isTopFace), direction, wx, wy, wz, ao, null, light4);
         }
     };
 
@@ -524,21 +563,9 @@ function renderChunk(scene, chunkX, chunkZ) {
                 if (!block || block === 'air') continue;
 
                 if (block.charCodeAt(0) === 102 /* 'f' */ && block.startsWith('flower_')) {
-                    addFlower(getFlowerBuilder(block), baseX + x, y, baseZ + z, block);
+                    const flight = lightField.at(baseX + x, y, baseZ + z);
+                    addFlower(getFlowerBuilder(block), baseX + x, y, baseZ + z, block, flight);
                     continue;
-                }
-
-                if (block.includes('_glowing_')) {
-                    const parts = block.split('_');
-                    const colorHex = `#${parts[parts.length - 2]}`;
-                    const intensity = parseFloat(parts[parts.length - 1]);
-                    if (intensity && colorHex) {
-                        // A deferred light volume — cheap and unlimited (see deferredLights.js).
-                        lights.push(createLight({
-                            x: baseX + x, y, z: baseZ + z,
-                            color: colorHex, intensity, radius: 5,
-                        }));
-                    }
                 }
 
                 const isWater = block === 'water';
@@ -564,23 +591,17 @@ function renderChunk(scene, chunkX, chunkZ) {
     }
 
     const meshes = [];
-    const pushMesh = (b, albedo) => {
+    const pushMesh = (b) => {
         const mesh = finalizeBuilder(b);
-        if (mesh) {
-            // Tag ground meshes so the deferred albedo pass renders them (their
-            // materials emit albedo there). Water is excluded on purpose.
-            if (albedo) mesh.layers.enable(ATLAS_ALBEDO_LAYER);
-            scene.add(mesh);
-            meshes.push(mesh);
-        }
+        if (mesh) { scene.add(mesh); meshes.push(mesh); }
     };
 
-    if (atlasBuilder) pushMesh(atlasBuilder, true);           // all atlased blocks
-    for (const k in builders) pushMesh(builders[k], true);    // special blocks (ice/gold/berry)
-    for (const k in flowerBuilders) pushMesh(flowerBuilders[k], true); // flowers/grass
-    if (waterBuilder) pushMesh(waterBuilder);                 // transparent water last (no albedo)
+    if (atlasBuilder) pushMesh(atlasBuilder);          // all atlased blocks
+    for (const k in builders) pushMesh(builders[k]);   // special blocks (ice/gold/berry)
+    for (const k in flowerBuilders) pushMesh(flowerBuilders[k]);
+    if (waterBuilder) pushMesh(waterBuilder);          // transparent water last
 
-    chunkMeshes[chunkKey(chunkX, chunkZ)] = { meshes, lights };
+    chunkMeshes[chunkKey(chunkX, chunkZ)] = { meshes };
 }
 
 
@@ -595,7 +616,6 @@ function clearChunk(scene, chunkX, chunkZ) {
         scene.remove(mesh);
         if (mesh.geometry) mesh.geometry.dispose();
     });
-    entry.lights.forEach((handle) => removeLight(handle));
 
     delete chunkMeshes[key];
 }

@@ -3,15 +3,15 @@ import * as THREE from './three.r168.module.js';
 import Stats from './Stats.js';
 
 import { EffectComposer } from './postprocessing/EffectComposer.js';
+import { RenderPass } from './postprocessing/RenderPass.js';
 import { OutputPass } from './postprocessing/OutputPass.js';
 import { ShaderPass } from './postprocessing/ShaderPass.js';
 import { FXAAShader } from './rendering/shaders/FXAAShader.js';
 
 import { renderClouds, updateChunks } from './rendering/terrain_renderer.js';
-import { SceneRenderPass, DeferredLightPass, CompositePass, AlbedoPass, setDepthTexture } from './rendering/deferredLights.js';
 import { breakBlock, placeBlock } from './player/blockActions.js';
 import { raycastVoxel } from './player/collision.js';
-import { buildBlockAtlas, setAtlasWhiteTextureDebug, ATLAS_ALBEDO_LAYER } from './rendering/blockAtlas.js';
+import { buildBlockAtlas, setAtlasWhiteTextureDebug } from './rendering/blockAtlas.js';
 
 import { MinecraftControls } from './player/MinecraftControls.js';
 import { updateLighting, 
@@ -161,51 +161,10 @@ export const { skyMesh, skyMaterial } = createGradientSky(scene);
 createFireflies(scene);
 createAurora(scene);
 
-// Deferred point-light targets. `sceneRT` keeps a DepthTexture so the light pass
-// can reconstruct world positions from the forward depth (no second geometry pass).
-function makeTargets() {
-    const dpr = renderer.getPixelRatio();
-    const w = Math.floor(window.innerWidth * dpr);
-    const h = Math.floor(window.innerHeight * dpr);
-
-    const depthTexture = new THREE.DepthTexture(w, h);
-    depthTexture.format = THREE.DepthStencilFormat;   // 24+8, samplable in WebGL2
-    depthTexture.type = THREE.UnsignedInt248Type;
-
-    const sceneRT = new THREE.WebGLRenderTarget(w, h, {
-        type: THREE.HalfFloatType,
-        minFilter: THREE.NearestFilter,
-        magFilter: THREE.NearestFilter,
-        depthTexture,
-    });
-    // Albedo of ground surfaces (atlas blocks, special blocks, flowers), filled
-    // by a cheap dedicated pass so the deferred lights reveal the texture instead
-    // of a flat additive tint. It has its own depth buffer so billboards occlude
-    // the terrain behind them correctly.
-    const albedoRT = new THREE.WebGLRenderTarget(w, h, {
-        type: THREE.HalfFloatType,
-        minFilter: THREE.NearestFilter,
-        magFilter: THREE.NearestFilter,
-    });
-    const lightRT = new THREE.WebGLRenderTarget(w, h, {
-        type: THREE.HalfFloatType,
-        minFilter: THREE.NearestFilter,
-        magFilter: THREE.NearestFilter,
-    }); // no depthTexture — the light pass samples sceneRT's depth
-    return { sceneRT, lightRT, albedoRT };
-}
-
-const { sceneRT, lightRT, albedoRT } = makeTargets();
-setDepthTexture(sceneRT.depthTexture);
-
-// Initialize post-processing.
-// Pipeline: beauty+depth -> terrain albedo -> additive light volumes -> composite -> FXAA -> output.
+// Initialize post-processing (plain forward pipeline; block light is baked
+// per-vertex into the chunk geometry, so no screen-space light passes are needed).
 const composer = new EffectComposer(renderer);
-composer.addPass(new SceneRenderPass(scene, camera, sceneRT));
-composer.addPass(new AlbedoPass(scene, camera, albedoRT, ATLAS_ALBEDO_LAYER));
-composer.addPass(new DeferredLightPass(camera, lightRT));
-const compositePass = new CompositePass(sceneRT, lightRT, albedoRT);
-composer.addPass(compositePass);
+composer.addPass(new RenderPass(scene, camera));
 
 const fxaaPass = new ShaderPass(FXAAShader);
     fxaaPass.material.uniforms['resolution'].value.set(1 / window.innerWidth, 1 / window.innerHeight);
@@ -222,18 +181,9 @@ function updateComposerSize() {
     renderer.setSize(width, height); // Set renderer size
     composer.setSize(width, height); // Set composer size
 
-    // Keep the camera + deferred targets in sync (the old handler never updated
-    // the camera aspect — position reconstruction needs a correct projection).
+    // Keep the camera aspect in sync (the original handler never did this).
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
-
-    const dpr = renderer.getPixelRatio();
-    const w = Math.floor(width * dpr);
-    const h = Math.floor(height * dpr);
-    sceneRT.setSize(w, h);
-    lightRT.setSize(w, h);
-    albedoRT.setSize(w, h);
-    setDepthTexture(sceneRT.depthTexture);
 
     fxaaPass.material.uniforms['resolution'].value.set(1 / width, 1 / height);
 }
@@ -266,13 +216,8 @@ document.addEventListener('keydown', (event) => {
         console.log(`White texture debug: ${whiteTextureDebugEnabled ? 'ON' : 'OFF'}`);
     } else if (event.key === 'e' || event.key === 'E') {
         toggleInventory();
-    } else if (event.key === 'g' || event.key === 'G') {
-        _lightDebug = (_lightDebug + 1) % 3;
-        compositePass.setDebug(_lightDebug);
-        console.log(`Deferred debug view: ${['NORMAL', 'LIGHT buffer', 'ALBEDO buffer'][_lightDebug]}`);
     }
 });
-let _lightDebug = 0;
 
 export function updateLightingWithTime(time) {
     updateLighting(scene, time);

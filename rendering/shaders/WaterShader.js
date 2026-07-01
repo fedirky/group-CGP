@@ -1,3 +1,5 @@
+import { injectBlockLight } from '../../voxelAO.js';
+
 export function patchWaterShader(shader) {
     shader.vertexShader = `
         attribute float wpath;
@@ -28,4 +30,5 @@ export function patchWaterShader(shader) {
         diffuseColor.a = clamp(0.60 + pathLen * 0.10, 0.70, 1.0);`
     );
 
+    injectBlockLight(shader); // baked berry light on water too
 }

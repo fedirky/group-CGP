@@ -1,5 +1,6 @@
 import { WATER_CONFIG, WORLD_CONFIG } from '../config.js';
 import { getBlockAt, setBlock } from './terrain_generator.js';
+import { invalidateChunkSources } from './blockLight.js';
 
 const CHUNK_SIZE = WORLD_CONFIG.chunkSize;
 const WATER_LEVEL = WATER_CONFIG.level;
@@ -7,10 +8,14 @@ const FLOOD_CAP = WATER_CONFIG.floodCap;
 
 const chunkKey = (cx, cz) => `${cx},${cz}`;
 
+// Rebuild the block's chunk AND its 3x3 chunk neighbourhood, because baked block
+// light spans up to one chunk away and must be repropagated.
 function addAffectedChunks(set, wx, wz) {
+    const ccx = Math.floor(wx / CHUNK_SIZE);
+    const ccz = Math.floor(wz / CHUNK_SIZE);
     for (let dx = -1; dx <= 1; dx++) {
         for (let dz = -1; dz <= 1; dz++) {
-            set.add(chunkKey(Math.floor((wx + dx) / CHUNK_SIZE), Math.floor((wz + dz) / CHUNK_SIZE)));
+            set.add(chunkKey(ccx + dx, ccz + dz));
         }
     }
 }
@@ -52,6 +57,8 @@ function floodWater(sx, sy, sz, affected) {
 export function breakVoxel(worldX, worldY, worldZ) {
     if (!setBlock(worldX, worldY, worldZ, 'air')) return null;
 
+    invalidateChunkSources(Math.floor(worldX / CHUNK_SIZE), Math.floor(worldZ / CHUNK_SIZE));
+
     const affected = new Set();
     addAffectedChunks(affected, worldX, worldZ);
     floodWater(worldX, worldY, worldZ, affected);
@@ -63,6 +70,8 @@ export function placeVoxel(worldX, worldY, worldZ, type) {
     const existing = getBlockAt(worldX, worldY, worldZ);
     if (existing !== 'air' && existing !== 'water') return null;
     if (!setBlock(worldX, worldY, worldZ, type)) return null;
+
+    invalidateChunkSources(Math.floor(worldX / CHUNK_SIZE), Math.floor(worldZ / CHUNK_SIZE));
 
     const affected = new Set();
     addAffectedChunks(affected, worldX, worldZ);

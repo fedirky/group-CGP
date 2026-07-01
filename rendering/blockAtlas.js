@@ -1,6 +1,6 @@
 import * as THREE from '../three.r168.module.js';
 
-import { aoUniforms, injectAlbedoOutput } from '../voxelAO.js';
+import { aoUniforms, injectBlockLight } from '../voxelAO.js';
 
 /*
  * Texture-array atlas for the common opaque Lambert blocks.
@@ -32,10 +32,6 @@ const ATLAS_BLOCKS = [
 ];
 
 const LAYER_OF = new Map(ATLAS_BLOCKS.map((b, i) => [b.key, i]));
-
-// Object3D layer the atlas meshes are tagged with, so the albedo pass can render
-// ONLY them (via camera.layers) without touching any other material.
-export const ATLAS_ALBEDO_LAYER = 2;
 
 let atlasMaterial = null;
 const whiteTextureDebugUniform = { value: 0.0 };
@@ -177,7 +173,7 @@ function makeAtlasMaterial(colorArray, bumpArray) {
             diffuseColor.rgb *= mix(1.0, vAoShade, uAOEnabled);`
         );
 
-        injectAlbedoOutput(shader); // emit albedo in the deferred albedo pass
+        injectBlockLight(shader); // baked berry light
     };
 
     return material;
