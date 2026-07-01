@@ -15,16 +15,21 @@
     <script src="https://threejs.org/examples/js/loaders/FontLoader.js"></script>
     <script type="module" src="./app.js"></script>
 
+    <!-- Crosshair -->
+    <div id="crosshair"></div>
+
     <!-- Settings / pause menu (opens on Escape) -->
     <div id="settings-menu">
         <div id="settings-panel">
-            <h2>Налаштування</h2>
-            <p class="settings-hint">Режим пересування</p>
+            <h2>Settings</h2>
+            <p class="settings-hint">Movement mode</p>
             <div id="mode-buttons">
-                <button class="mode-button" data-mode="fly">Політ</button>
-                <button class="mode-button" data-mode="walk">Ходьба</button>
+                <button class="mode-button" data-mode="fly">Fly</button>
+                <button class="mode-button" data-mode="walk">Walk</button>
             </div>
-            <button id="resume-button">Продовжити</button>
+            <p class="settings-hint">Render distance: <span id="render-distance-value">6</span> chunks</p>
+            <input type="range" id="render-distance-slider" min="2" max="16" step="1" value="6">
+            <button id="resume-button">Resume</button>
         </div>
     </div>
 

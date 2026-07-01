@@ -1,7 +1,5 @@
 import * as THREE from './three.r168.module.js';
 
-import { getChunk } from './terrain_generator.js';
-
 /*
  * Per-vertex ambient occlusion for our voxel world.
  *
@@ -23,16 +21,12 @@ import { getChunk } from './terrain_generator.js';
  *          if (side1 && side2) return 0;          // wedged into an inner edge
  *          return 3 - (side1 + side2 + corner);   // 3 = open, 0 = fully buried
  *
- * Our renderer draws each face as an instance of a shared 1x1 PlaneGeometry, so
- * instead of writing the value onto unique vertices we hand the four corner
- * values to the GPU as a per-instance vec4 (`aoCorners`) and bilinearly
- * interpolate them in the fragment shader. Bilinear interpolation is symmetric,
- * so it also sidesteps the article's "anisotropy" problem (where splitting a
- * quad into two triangles makes the shading depend on the diagonal) without
- * needing to flip quads -- which instancing wouldn't allow anyway.
+ * The renderer bakes faces into a merged per-chunk BufferGeometry, so each face
+ * vertex carries its corner value in a per-vertex `aoShade` float that the GPU
+ * interpolates across the face. The article's "anisotropy" problem (shading
+ * depending on which diagonal a quad is split along) is handled at bake time by
+ * flipping the triangulation toward the brighter diagonal.
  */
-
-const CHUNK_SIZE = 16;
 
 // Brightness multiplier for each AO level (0 = darkest, 3 = unoccluded).
 // Tweak these to taste; the gap between 3 and 0 controls how strong the
@@ -108,39 +102,23 @@ const AO_OFFSETS = {};
     }
 })();
 
-// World-space block lookup that resolves across chunk boundaries.
-function getBlockAtWorld(wx, wy, wz) {
-    const cx = Math.floor(wx / CHUNK_SIZE);
-    const cz = Math.floor(wz / CHUNK_SIZE);
-    const chunk = getChunk(cx, cz);
-    if (!chunk) return 'air';
-
-    const lx = wx - cx * CHUNK_SIZE;
-    const lz = wz - cz * CHUNK_SIZE;
-    if (wy < 0 || wy >= chunk[0][0].length) return 'air';
-
-    const cell = chunk[lx]?.[lz]?.[wy];
-    return cell ? cell.block : 'air';
-}
-
-// A voxel occludes ambient light if it's a real, opaque cube. Air, water and
-// the billboard "flower_" plants do not cast contact shadows.
-function isOccluder(block) {
-    return !!block && block !== 'air' && block !== 'water' && !block.startsWith('flower_');
-}
-
 /**
  * Compute the four corner brightness values for one face.
+ *
+ * `isOcc(x, y, z)` must return 1 if the voxel at those coordinates occludes
+ * ambient light (a solid cube) and 0 otherwise. The caller supplies it so AO
+ * can be sampled straight from a chunk's local array (no per-sample getChunk).
+ *
  * Returns a Float32Array(4) (reused!) in PlaneGeometry vertex order.
  */
-export function computeFaceAO(direction, wx, wy, wz) {
+export function computeFaceAO(direction, x, y, z, isOcc) {
     const table = AO_OFFSETS[direction];
 
     for (let i = 0; i < 4; i++) {
         const o = table[i];
-        const s1 = isOccluder(getBlockAtWorld(wx + o.s1[0], wy + o.s1[1], wz + o.s1[2])) ? 1 : 0;
-        const s2 = isOccluder(getBlockAtWorld(wx + o.s2[0], wy + o.s2[1], wz + o.s2[2])) ? 1 : 0;
-        const c  = isOccluder(getBlockAtWorld(wx + o.c[0],  wy + o.c[1],  wz + o.c[2]))  ? 1 : 0;
+        const s1 = isOcc(x + o.s1[0], y + o.s1[1], z + o.s1[2]);
+        const s2 = isOcc(x + o.s2[0], y + o.s2[1], z + o.s2[2]);
+        const c  = isOcc(x + o.c[0],  y + o.c[1],  z + o.c[2]);
 
         const level = (s1 && s2) ? 0 : 3 - (s1 + s2 + c);
         AO_SCRATCH[i] = AO_BRIGHTNESS[level];
@@ -150,9 +128,11 @@ export function computeFaceAO(direction, wx, wy, wz) {
 }
 
 /**
- * Inject AO into a standard three.js material. Reads the per-instance
- * `aoCorners` attribute, bilinearly interpolates across the face in the
- * fragment shader, and multiplies the albedo before lighting.
+ * Inject AO into a standard three.js material. Reads a per-vertex `aoShade`
+ * float (baked into the merged chunk geometry), lets the GPU interpolate it
+ * across the face, and multiplies the albedo before lighting. The quad
+ * triangulation is flipped at bake time to avoid the diagonal interpolation
+ * artifact, so plain per-vertex interpolation is enough here.
  */
 export function patchMaterialWithAO(material) {
     material.onBeforeCompile = (shader) => {
@@ -160,42 +140,27 @@ export function patchMaterialWithAO(material) {
         shader.uniforms.uAOEnabled = aoUniforms.uAOEnabled;
 
         shader.vertexShader = `
-            attribute vec4 aoCorners;
-            varying vec4 vAoCorners;
-            varying vec2 vAoUv;
+            attribute float aoShade;
+            varying float vAoShade;
         ` + shader.vertexShader;
 
         shader.vertexShader = shader.vertexShader.replace(
             '#include <begin_vertex>',
             `#include <begin_vertex>
-            vAoCorners = aoCorners;
-            vAoUv = position.xy + 0.5; // local plane corners (-0.5..0.5) -> 0..1`
+            vAoShade = aoShade;`
         );
 
         shader.fragmentShader = `
             uniform float uAOEnabled;
-            varying vec4 vAoCorners;
-            varying vec2 vAoUv;
+            varying float vAoShade;
         ` + shader.fragmentShader;
 
         shader.fragmentShader = shader.fragmentShader.replace(
             '#include <color_fragment>',
             `#include <color_fragment>
-            float aoTop    = mix(vAoCorners.x, vAoCorners.y, vAoUv.x);
-            float aoBottom = mix(vAoCorners.z, vAoCorners.w, vAoUv.x);
-            float aoFactor = mix(aoBottom, aoTop, vAoUv.y);
-            diffuseColor.rgb *= mix(1.0, aoFactor, uAOEnabled);`
+            diffuseColor.rgb *= mix(1.0, vAoShade, uAOEnabled);`
         );
     };
 
     return material;
-}
-
-/**
- * Allocate the per-instance AO attribute for a face InstancedMesh's geometry.
- * Defaults to fully-lit (1.0) so any unwritten instances stay neutral.
- */
-export function attachAOAttribute(geometry, maxInstances) {
-    const data = new Float32Array(maxInstances * 4).fill(1.0);
-    geometry.setAttribute('aoCorners', new THREE.InstancedBufferAttribute(data, 4));
 }

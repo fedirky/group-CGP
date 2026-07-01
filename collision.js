@@ -34,3 +34,58 @@ export function isSolidAt(bx, by, bz) {
     const block = getBlockAt(bx, by, bz);
     return !!block && block !== 'air' && !block.startsWith('flower_');
 }
+
+
+// Is this block a valid target for breaking? Everything except air and water,
+// so grass and flower billboards can be broken just like solid blocks.
+function isBreakable(block) {
+    return !!block && block !== 'air' && block !== 'water';
+}
+
+
+/*
+ * March a ray through the voxel grid (Amanatides & Woo DDA) and return the first
+ * breakable block it hits, or null. `origin` and `dir` are THREE.Vector3-likes
+ * (dir need not be normalised). Coordinates use the same +/-0.5 block convention
+ * as everything else, so the cell containing a point p is round(p) = floor(p+0.5).
+ */
+export function raycastVoxel(origin, dir, maxDistance = 6) {
+    const len = Math.hypot(dir.x, dir.y, dir.z);
+    if (len === 0) return null;
+
+    const dx = dir.x / len, dy = dir.y / len, dz = dir.z / len;
+
+    // Work in a grid shifted by +0.5 so cells are the unit ranges [n, n+1].
+    const px = origin.x + 0.5, py = origin.y + 0.5, pz = origin.z + 0.5;
+
+    let ix = Math.floor(px), iy = Math.floor(py), iz = Math.floor(pz);
+
+    const stepX = Math.sign(dx), stepY = Math.sign(dy), stepZ = Math.sign(dz);
+    const tDeltaX = dx !== 0 ? Math.abs(1 / dx) : Infinity;
+    const tDeltaY = dy !== 0 ? Math.abs(1 / dy) : Infinity;
+    const tDeltaZ = dz !== 0 ? Math.abs(1 / dz) : Infinity;
+
+    const fracX = px - ix, fracY = py - iy, fracZ = pz - iz;
+    let tMaxX = stepX > 0 ? (1 - fracX) * tDeltaX : fracX * tDeltaX;
+    let tMaxY = stepY > 0 ? (1 - fracY) * tDeltaY : fracY * tDeltaY;
+    let tMaxZ = stepZ > 0 ? (1 - fracZ) * tDeltaZ : fracZ * tDeltaZ;
+
+    let t = 0;
+    while (t <= maxDistance) {
+        // Advance to the next voxel boundary along the nearest axis.
+        if (tMaxX < tMaxY && tMaxX < tMaxZ) {
+            ix += stepX; t = tMaxX; tMaxX += tDeltaX;
+        } else if (tMaxY < tMaxZ) {
+            iy += stepY; t = tMaxY; tMaxY += tDeltaY;
+        } else {
+            iz += stepZ; t = tMaxZ; tMaxZ += tDeltaZ;
+        }
+
+        const block = getBlockAt(ix, iy, iz);
+        if (isBreakable(block)) {
+            return { x: ix, y: iy, z: iz, block };
+        }
+    }
+
+    return null;
+}

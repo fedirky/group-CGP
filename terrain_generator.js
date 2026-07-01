@@ -1,3 +1,5 @@
+import { generateTrees } from './tree_generator.js';
+
 const simplex = new SimplexNoise();
 
 const scale = 0.02;
@@ -9,19 +11,81 @@ const numChunksZ = 8;
 
 const chunks = {};
 
-
-for (let i = -Math.round(numChunksX/2); i < Math.round(numChunksX/2); i++) {
-    for (let j = -Math.round(numChunksZ/2); j < Math.round(numChunksZ/2); j++) {
-        generateLandscape(i, j);
-        generateWater(i, j);
-        generateTrees(i, j);
-        generatePlants(i, j);
-    }
+// Block accessor bundle handed to the (pure) tree generator.
+const treeApi = {
+    chunkSize,
+    worldHeight: chunkSize * 2,
+    getBlock(wx, wy, wz) {
+        const cx = Math.floor(wx / chunkSize);
+        const cz = Math.floor(wz / chunkSize);
+        const ch = getChunk(cx, cz);
+        if (!ch) return 'air';
+        const lx = wx - cx * chunkSize;
+        const lz = wz - cz * chunkSize;
+        if (wy < 0 || wy >= ch[0][0].length) return 'air';
+        const cell = ch[lx]?.[lz]?.[wy];
+        return cell ? cell.block : 'air';
+    },
+    setBlock,
 };
+
+// Tracks which chunks have had their decorations (trees + plants) generated.
+const featuresDone = new Set();
 
 
 export function getChunk(chunkX, chunkZ) {
     return chunks[chunkX]?.[chunkZ] || null;
+}
+
+
+// Ensure a chunk's terrain data (landscape + water) exists. On-demand, so the
+// world can stream in around the player instead of being fully built up front.
+export function ensureChunk(cx, cz) {
+    if (!chunks[cx]?.[cz]) {
+        generateLandscape(cx, cz);
+        generateWater(cx, cz);
+    }
+    return chunks[cx][cz];
+}
+
+
+// Ensure a chunk's decorations (trees + plants). Trees can write leaves into the
+// eight neighbouring chunks, so their terrain data is ensured first. Returns true
+// only on the call that actually generated them.
+export function ensureChunkFeatures(cx, cz) {
+    const key = `${cx},${cz}`;
+    if (featuresDone.has(key)) return false;
+    featuresDone.add(key); // mark first so tree spill can't recurse back in
+
+    for (let dx = -1; dx <= 1; dx++) {
+        for (let dz = -1; dz <= 1; dz++) {
+            ensureChunk(cx + dx, cz + dz);
+        }
+    }
+
+    generateTrees(cx, cz, treeApi);
+    generatePlants(cx, cz);
+    return true;
+}
+
+
+// Set the block type at integer world coordinates. Returns true on success.
+export function setBlock(worldX, worldY, worldZ, type) {
+    const cx = Math.floor(worldX / chunkSize);
+    const cz = Math.floor(worldZ / chunkSize);
+    const chunk = getChunk(cx, cz);
+    if (!chunk) return false;
+
+    const lx = worldX - cx * chunkSize;
+    const lz = worldZ - cz * chunkSize;
+    if (worldY < 0 || worldY >= chunk[0][0].length) return false;
+
+    if (chunk[lx]?.[lz]?.[worldY]) {
+        chunk[lx][lz][worldY].block = type;
+    } else {
+        chunk[lx][lz][worldY] = { block: type };
+    }
+    return true;
 }
 
 
@@ -121,100 +185,6 @@ function generateWater(chunkX, chunkZ) {
                         ) {
                             chunk[x][z][y].block = 'sand';
                             break; // Stop checking other neighbors
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    return true;
-}
-
-
-// Function to generate a tree at a specific position
-function generateTree(chunk, x, z, y) {
-    const trees = ["oak", "oak_gold", "skyroot"];
-    const tree = trees[Math.floor(Math.random() * trees.length)];
-
-    const treeHeight = Math.floor(Math.random() * 2) + 3; // Random height between 4 and 7
-
-    // Generate the trunk
-    for (let h = 1; h <= treeHeight; h++) {
-        if (y + h < chunkSize * 2) {
-            chunk[x][z][y + h] = { block: `${tree}_log` };
-        }
-    }
-
-    const crownStart = y + treeHeight; // Crown starts at the top of the trunk
-    const crownLayers = [2, 2, 2, 1]; // Radii for each of the 3 layers of the crown
-
-    for (let layer = 0; layer < crownLayers.length; layer++) {
-        const radius = crownLayers[layer];
-        const layerY = crownStart + layer; // Y-coordinate for this layer
-
-        for (let dx = -radius; dx <= radius; dx++) {
-            for (let dz = -radius; dz <= radius; dz++) {
-                // Check for 3-5-5-5-3 pattern when radius is 2
-                if (
-                    (radius === 2 && !(Math.abs(dx) === 2 && Math.abs(dz) === 2)) ||
-                    (radius !== 2 && Math.abs(dx) + Math.abs(dz) <= radius)
-                ) {
-                    const leafX = x + dx;
-                    const leafZ = z + dz;
-                    if (
-                        leafX >= 0 && leafX < chunkSize &&
-                        leafZ >= 0 && leafZ < chunkSize &&
-                        layerY < chunkSize * 2 &&
-                        (!chunk[leafX][leafZ][layerY] || chunk[leafX][leafZ][layerY].block === 'air')
-                    ) {
-                        if (tree === 'skyroot') {
-                            // Generate glowing berries only on the lowest layer of leaves and inner layer (next to log)
-                            if (layer === 0 && Math.abs(dx) <= 1 && Math.abs(dz) <= 1 && Math.random() < 0.2) {
-                                chunk[leafX][leafZ][layerY] = { block: 'skyroot_leaves_berry_glowing_2D3D59_3' };
-                            } else {
-                                chunk[leafX][leafZ][layerY] = { block: 'skyroot_leaves' };
-                            }
-                        } else {
-                            chunk[leafX][leafZ][layerY] = { block: `${tree}_leaves` };
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-
-
-
-// Function to generate trees in the chunk
-function generateTrees(chunkX, chunkZ) {
-    
-    const chunk = getChunk(chunkX, chunkZ);
-    if (!chunk) {
-        console.error(`Chunk (${chunkX}, ${chunkZ}) not found.`);
-        return false;
-    }
-
-    for (let quadrantX = 0; quadrantX < 2; quadrantX++) {
-        for (let quadrantZ = 0; quadrantZ < 2; quadrantZ++) {
-            const startX = quadrantX * 8 + 2; // Start x of the central 4x4 area
-            const startZ = quadrantZ * 8 + 2; // Start z of the central 4x4 area
-
-            if (Math.random() < 0.25) { // 25% chance to generate a tree in this quadrant
-                let treePlaced = false;
-                for (let offsetX = 0; offsetX < 4 && !treePlaced; offsetX++) {
-                    for (let offsetZ = 0; offsetZ < 4 && !treePlaced; offsetZ++) {
-                        const x = startX + offsetX;
-                        const z = startZ + offsetZ;
-
-                        for (let y = chunkSize - 1; y >= 0; y--) {
-                            if (chunk[x][z][y]?.block === 'dirt' && chunk[x][z][y + 1]?.block === 'air') {
-                                generateTree(chunk, x, z, y); // Generate tree
-                                treePlaced = true;
-                                break;
-                            }
                         }
                     }
                 }

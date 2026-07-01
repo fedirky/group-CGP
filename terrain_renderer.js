@@ -1,24 +1,170 @@
 import * as THREE from './three.r168.module.js';
 
-import { getChunk } from './terrain_generator.js';
+import { getChunk, setBlock, ensureChunkFeatures } from './terrain_generator.js';
+import { getBlockAt } from './collision.js';
 
-import { computeFaceAO, patchMaterialWithAO, attachAOAttribute } from './voxelAO.js';
+import { computeFaceAO, patchMaterialWithAO } from './voxelAO.js';
+
+import { getLayer, getAtlasMaterial } from './blockAtlas.js';
+import { patchWaterShader } from './shaders/WaterShader.js';
 
 
 const textures = `./resources/texturepacks/default`;
-const numChunksX = 8;
-const numChunksZ = 8;
 
 const globalBumpScale = 0.8;
 
 const textureLoader = new THREE.TextureLoader();
 const materials = {};
 
-const maxInstancesPerMesh = 2048;
-const maxFlowerInstances = 2048;
+// Per-chunk render data. Each chunk bakes ONE merged BufferGeometry per material
+// (a single draw call, tightly sized) instead of thousands of InstancedMesh
+// faces — far less memory churn and GPU upload, which is what makes streaming
+// smooth. chunkMeshes["cx,cz"] = { meshes: [Mesh, ...], lights: [PointLight, ...] }
+const chunkMeshes = {};
 
-const meshes = {}; // Store arrays of InstancedMeshes by block type
-const flowerMeshes = {};
+const chunkKey = (cx, cz) => `${cx},${cz}`;
+
+// All glowing point lights currently in the world. Forward rendering evaluates
+// every visible light per fragment, so we keep only the nearest few active.
+const _allLights = [];
+const MAX_ACTIVE_LIGHTS = 6;
+
+
+// --- Precomputed face quads --------------------------------------------------
+// Corner offsets (relative to a block centre) + UVs for each of the six faces,
+// derived once from the same rotations the old per-face planes used so textures
+// keep their orientation. PlaneGeometry vertex order: TL, TR, BL, BR.
+const _PLANE = [
+    { p: [-0.5,  0.5, 0], uv: [0, 1] }, // v0 top-left
+    { p: [ 0.5,  0.5, 0], uv: [1, 1] }, // v1 top-right
+    { p: [-0.5, -0.5, 0], uv: [0, 0] }, // v2 bottom-left
+    { p: [ 0.5, -0.5, 0], uv: [1, 0] }, // v3 bottom-right
+];
+
+const _FACE_DEFS = {
+    left:  { offset: [-1, 0, 0], rotation: [0, -Math.PI / 2, 0] },
+    right: { offset: [1, 0, 0],  rotation: [0, Math.PI / 2, 0] },
+    down:  { offset: [0, -1, 0], rotation: [Math.PI / 2, 0, 0] },
+    up:    { offset: [0, 1, 0],  rotation: [-Math.PI / 2, 0, 0] },
+    back:  { offset: [0, 0, -1], rotation: [0, Math.PI, 0] },
+    front: { offset: [0, 0, 1],  rotation: [0, 0, 0] },
+};
+
+const FACE_QUADS = {};
+(function buildFaceQuads() {
+    const m = new THREE.Matrix4();
+    const v = new THREE.Vector3();
+    for (const dir in _FACE_DEFS) {
+        const { offset, rotation } = _FACE_DEFS[dir];
+        m.makeRotationFromEuler(new THREE.Euler(rotation[0], rotation[1], rotation[2]));
+        const verts = _PLANE.map(({ p }) => {
+            v.set(p[0], p[1], p[2]).applyMatrix4(m);
+            return [v.x + 0.5 * offset[0], v.y + 0.5 * offset[1], v.z + 0.5 * offset[2]];
+        });
+        FACE_QUADS[dir] = { normal: offset.slice(), verts, uvs: _PLANE.map((c) => c.uv) };
+    }
+})();
+
+
+// The six face directions (constant; hoisted so it isn't re-allocated per block).
+const NEIGHBORS = [
+    { offset: [-1, 0, 0], isTopFace: false, direction: 'left' },
+    { offset: [1, 0, 0],  isTopFace: false, direction: 'right' },
+    { offset: [0, -1, 0], isTopFace: false, direction: 'down' },
+    { offset: [0, 1, 0],  isTopFace: true,  direction: 'up' },
+    { offset: [0, 0, -1], isTopFace: false, direction: 'back' },
+    { offset: [0, 0, 1],  isTopFace: false, direction: 'front' },
+];
+
+const WATER_PATH_BLUR_RADIUS = 2;
+const WATER_PATH_BLUR_FALLOFF = 0.45;
+
+// A geometry accumulator for one material within one chunk.
+function newBuilder(material, withAO, withLayer, withWater) {
+    return {
+        pos: [], norm: [], uv: [],
+        shade: withAO ? [] : null,
+        layer: withLayer ? [] : null,
+        wpath: withWater ? [] : null, // center water depth used for ray path length
+        idx: [], vcount: 0, material,
+    };
+}
+
+// Append one water face (simple quad). The shader derives both colour and
+// opacity from the interpolated view-ray path length.
+function addWaterFace(b, dir, x, y, z, paths) {
+    const q = FACE_QUADS[dir];
+    const base = b.vcount;
+    for (let k = 0; k < 4; k++) {
+        const vert = q.verts[k];
+        b.pos.push(x + vert[0], y + vert[1], z + vert[2]);
+        b.norm.push(q.normal[0], q.normal[1], q.normal[2]);
+        b.uv.push(q.uvs[k][0], q.uvs[k][1]);
+        b.wpath.push(paths[k]);
+    }
+    b.vcount += 4;
+    b.idx.push(base, base + 2, base + 1, base + 2, base + 3, base + 1);
+}
+
+// Append one block face (with per-corner AO, optional atlas layer, and the
+// anisotropy-avoiding triangulation flip).
+function addFace(b, dir, x, y, z, ao, layer) {
+    const q = FACE_QUADS[dir];
+    const base = b.vcount;
+    for (let k = 0; k < 4; k++) {
+        const vert = q.verts[k];
+        b.pos.push(x + vert[0], y + vert[1], z + vert[2]);
+        b.norm.push(q.normal[0], q.normal[1], q.normal[2]);
+        b.uv.push(q.uvs[k][0], q.uvs[k][1]);
+        b.shade.push(ao[k]);
+        if (b.layer) b.layer.push(layer);
+    }
+    b.vcount += 4;
+    // Split along the brighter diagonal so a dark corner doesn't bleed across.
+    if (ao[0] + ao[3] > ao[1] + ao[2]) {
+        b.idx.push(base, base + 2, base + 3, base, base + 3, base + 1);
+    } else {
+        b.idx.push(base, base + 2, base + 1, base + 2, base + 3, base + 1);
+    }
+}
+
+// Append one rotated/translated quad (used for flower billboards; no AO).
+const _qm = new THREE.Matrix4();
+const _qe = new THREE.Euler();
+const _qv = new THREE.Vector3();
+const _qn = new THREE.Vector3();
+function addQuad(b, px, py, pz, ex, ey, ez) {
+    _qm.makeRotationFromEuler(_qe.set(ex, ey, ez));
+    const base = b.vcount;
+    for (let k = 0; k < 4; k++) {
+        const p = _PLANE[k].p;
+        _qv.set(p[0], p[1], p[2]).applyMatrix4(_qm);
+        _qn.set(0, 0, 1).applyMatrix4(_qm);
+        b.pos.push(px + _qv.x, py + _qv.y, pz + _qv.z);
+        b.norm.push(_qn.x, _qn.y, _qn.z);
+        b.uv.push(_PLANE[k].uv[0], _PLANE[k].uv[1]);
+    }
+    b.vcount += 4;
+    b.idx.push(base, base + 2, base + 1, base + 2, base + 3, base + 1);
+}
+
+// Turn an accumulator into a Mesh (tightly-sized buffers + bounding sphere for
+// frustum culling). Returns null if nothing was emitted.
+function finalizeBuilder(b) {
+    if (b.vcount === 0) return null;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(b.pos, 3));
+    g.setAttribute('normal', new THREE.Float32BufferAttribute(b.norm, 3));
+    if (b.uv.length) g.setAttribute('uv', new THREE.Float32BufferAttribute(b.uv, 2));
+    if (b.shade) g.setAttribute('aoShade', new THREE.Float32BufferAttribute(b.shade, 1));
+    if (b.layer) g.setAttribute('layer', new THREE.Float32BufferAttribute(b.layer, 1));
+    if (b.wpath) g.setAttribute('wpath', new THREE.Float32BufferAttribute(b.wpath, 1));
+    g.setIndex(b.vcount > 65535
+        ? new THREE.Uint32BufferAttribute(b.idx, 1)
+        : new THREE.Uint16BufferAttribute(b.idx, 1));
+    g.computeBoundingSphere();
+    return new THREE.Mesh(g, b.material);
+}
 
 
 function getBlockTexture(block, isTopFace = false) {
@@ -131,14 +277,6 @@ function getBlockMaterial(block, isTopFace = false) {
 
 
 
-function getInstancedMeshesForMaterial(materialKey) {
-    if (!meshes[materialKey]) {
-        meshes[materialKey] = []; // Initialize as an array to hold multiple InstancedMeshes if needed
-    }
-    return meshes[materialKey];
-}
-
-
 function createFlowerPlaneMaterial(flowerType) {
     if (!materials[flowerType]) {
         const texture = textureLoader.load(`${textures}/flowers/${flowerType}.png`);
@@ -178,259 +316,448 @@ function createFlowerPlaneMaterial(flowerType) {
 }
 
 
-function getOrCreateFlowerInstancedMesh(scene, flowerType) {
-    if (!flowerMeshes[flowerType]) {
-        flowerMeshes[flowerType] = [];
-    }
-    
-    const currentMeshes = flowerMeshes[flowerType];
-
-    // Check if we need to create a new instanced mesh
-    const lastMesh = currentMeshes[currentMeshes.length - 1];
-    if (!lastMesh || lastMesh.count >= maxFlowerInstances) {
-        const geometry = new THREE.PlaneGeometry(1, 1);
-        const material = createFlowerPlaneMaterial(flowerType);
-
-        const newMesh = new THREE.InstancedMesh(geometry, material, maxFlowerInstances);
-        newMesh.count = 0; // Track number of active instances
-        currentMeshes.push(newMesh);
-        scene.add(newMesh);
-    }
-
-    // Return the last available instanced mesh
-    return currentMeshes[currentMeshes.length - 1];
+// Deterministic 0..1 value hashed from integer coordinates (+ salt). Used for
+// decoration offsets so grass/flowers keep the SAME position when a chunk is
+// rebuilt after breaking a block (instead of re-rolling Math.random()).
+function hashUnit(x, y, z, salt) {
+    let h = 2166136261;
+    h = Math.imul(h ^ (x | 0), 16777619);
+    h = Math.imul(h ^ (y | 0), 16777619);
+    h = Math.imul(h ^ (z | 0), 16777619);
+    h = Math.imul(h ^ (salt | 0), 16777619);
+    // murmur3 fmix32 finalizer — strong avalanche so different salts decorrelate.
+    h ^= h >>> 16;
+    h = Math.imul(h, 2246822507);
+    h ^= h >>> 13;
+    h = Math.imul(h, 3266489909);
+    h ^= h >>> 16;
+    return (h >>> 0) / 4294967296;
 }
 
 
-function spawnFlowerInstance(scene, posX, posY, posZ, flowerType) {
-    const instancedMesh = getOrCreateFlowerInstancedMesh(scene, flowerType);
-
-    const tempMatrix = new THREE.Matrix4();
-
+// Bake a flower's billboard quads into a merged geometry builder. Offsets are
+// deterministic (hash-based) so they stay put when a chunk is rebuilt.
+function addFlower(b, posX, posY, posZ, flowerType) {
     if (flowerType === 'flower_lily') {
-        // Lily: flat, horizontal
-        const rotationZ = (Math.floor(Math.random() * 3) + 1) * Math.PI / 2; // Multiply by 90 degrees (Math.PI / 2)
-
-        tempMatrix.compose(
-            new THREE.Vector3(posX, posY - 0.62, posZ),
-            new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, rotationZ)), // Random Y rotation
-            new THREE.Vector3(1.0, 1.0, 1.0) // Adjust scale if needed
-        );
-
-        instancedMesh.setMatrixAt(instancedMesh.count++, tempMatrix);
+        // Lily: flat, horizontal, with a deterministic 90° rotation.
+        const rotationZ = (Math.floor(hashUnit(posX, posY, posZ, 0) * 3) + 1) * Math.PI / 2;
+        addQuad(b, posX, posY - 0.62, posZ, -Math.PI / 2, 0, rotationZ);
     } else {
-        // Random shift for X and Y coordinates
-        var randomShiftX = (Math.floor(Math.random() * 3) - 1) / 16; // Generates -1/16, 0, or 1/16
-        var randomShiftY = (Math.floor(Math.random() * 3) - 1) / 16; // Generates -1/16, 0, or 1/16
-        
-        // TODO Implement this properly
-        if (flowerType === 'flower_sugar_cane') {
-            randomShiftX = 0;
-            randomShiftY = 0;
-        }
-    
-        // First flower plane with random shift
-        tempMatrix.compose(
-            new THREE.Vector3(posX + randomShiftX, posY, posZ + randomShiftY), // Apply random shift
-            new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -Math.PI / 4, 0)), // No rotation
-            new THREE.Vector3(1.0, 1.0, 1.0) // Adjust scale as needed
-        );
-        instancedMesh.setMatrixAt(instancedMesh.count++, tempMatrix);
-    
-        // Second flower plane (rotated by 90 degrees) with random shift
-        const tempMatrix2 = new THREE.Matrix4();
-        tempMatrix2.compose(
-            new THREE.Vector3(posX + randomShiftX, posY, posZ + randomShiftY), // Apply random shift
-            new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI / 4, 0)), // 90 degree rotation
-            new THREE.Vector3(1.0, 1.0, 1.0) // Adjust scale as needed
-        );
-        instancedMesh.setMatrixAt(instancedMesh.count++, tempMatrix2);
+        let shiftX = (Math.floor(hashUnit(posX, posY, posZ, 1) * 3) - 1) / 16;
+        let shiftZ = (Math.floor(hashUnit(posX, posY, posZ, 2) * 3) - 1) / 16;
+        if (flowerType === 'flower_sugar_cane') { shiftX = 0; shiftZ = 0; }
+
+        // Two crossed planes.
+        addQuad(b, posX + shiftX, posY, posZ + shiftZ, 0, -Math.PI / 4, 0);
+        addQuad(b, posX + shiftX, posY, posZ + shiftZ, 0, Math.PI / 4, 0);
+    }
+}
+
+
+// Water column depth (in blocks) that maps to the fully-deep colour.
+const WATER_MAX_DEPTH = 5;
+
+let waterMaterial = null;
+let waterTexture = null;
+
+// Transparent, depth-tinted water. Depth colour comes from the water column
+// depth, while opacity comes from view-ray absorption.
+function getWaterMaterial() {
+    if (waterMaterial) return waterMaterial;
+
+    if (!waterTexture) {
+        waterTexture = textureLoader.load(`${textures}/liquids/water.png`);
+        waterTexture.colorSpace = THREE.SRGBColorSpace;
+        waterTexture.minFilter = THREE.LinearMipmapNearestFilter;
+        waterTexture.magFilter = THREE.NearestFilter;
+        waterTexture.generateMipmaps = true;
+        waterTexture.anisotropy = 16;
     }
 
-    // Mark the instanced mesh as needing an update
-    instancedMesh.instanceMatrix.needsUpdate = true;
+    waterMaterial = new THREE.MeshLambertMaterial({
+        map: waterTexture,
+        color: 0xffffff,
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        forceSinglePass: true,
+    });
+
+    waterMaterial.onBeforeCompile = patchWaterShader;
+
+    return waterMaterial;
 }
 
 
 function renderChunk(scene, chunkX, chunkZ) {
     const cubeSize = 1;
-    const CHUNK_SIZE = 16; // Розмір чанку. Має співпадати з тим, що використовується в getChunk
+    const CHUNK_SIZE = 16; // must match getChunk
 
     const chunkData = getChunk(chunkX, chunkZ);
-    const tempMatrix = new THREE.Matrix4();
+    if (!chunkData) return;
 
-    const renderFace = (block, posX, posY, posZ, offset, rotation, isTopFace, direction) => {
-        const materialKey = block === 'grass' && isTopFace ? 'grass_top' : block;
-        const material = getBlockMaterial(block, isTopFace);
-        const instancedMeshes = getInstancedMeshesForMaterial(materialKey);
-        let instancedMesh = instancedMeshes[instancedMeshes.length - 1];
+    const H = chunkData[0][0].length;
+    const baseX = chunkX * CHUNK_SIZE;
+    const baseZ = chunkZ * CHUNK_SIZE;
 
-        if (!instancedMesh || instancedMesh.count >= maxInstancesPerMesh) {
-            const geometry = new THREE.PlaneGeometry(cubeSize, cubeSize);
-            attachAOAttribute(geometry, maxInstancesPerMesh);
-            instancedMesh = new THREE.InstancedMesh(geometry, material, maxInstancesPerMesh);
-            instancedMesh.count = 0;
-            instancedMeshes.push(instancedMesh);
-            scene.add(instancedMesh);
-        }
+    // One merged-geometry builder per material in this chunk. Atlased blocks all
+    // share a single builder (one draw call); special/water blocks keep their own.
+    const builders = {};       // materialKey -> block builder (with AO)
+    const flowerBuilders = {}; // flowerType  -> flower builder (no AO)
+    const lights = [];
+    let atlasBuilder = null;
+    let waterBuilder = null;
 
-        tempMatrix.compose(
-            new THREE.Vector3(
-                posX * cubeSize + offset[0] * cubeSize / 2,
-                posY * cubeSize + offset[1] * cubeSize / 2,
-                posZ * cubeSize + offset[2] * cubeSize / 2
-            ),
-            new THREE.Quaternion().setFromEuler(new THREE.Euler(...rotation)),
-            new THREE.Vector3(1, 1, 1)
-        );
-
-        const idx = instancedMesh.count;
-
-        // Bake per-vertex ambient occlusion from the neighbouring voxels.
-        const ao = computeFaceAO(direction, Math.round(posX), Math.round(posY), Math.round(posZ));
-        const aoAttr = instancedMesh.geometry.getAttribute('aoCorners');
-        aoAttr.setXYZW(idx, ao[0], ao[1], ao[2], ao[3]);
-        aoAttr.needsUpdate = true;
-
-        instancedMesh.setMatrixAt(idx, tempMatrix);
-        instancedMesh.count++;
+    const getAtlasBuilder = () => {
+        if (!atlasBuilder) atlasBuilder = newBuilder(getAtlasMaterial(), true, true, false);
+        return atlasBuilder;
+    };
+    const getWaterBuilder = () => {
+        if (!waterBuilder) waterBuilder = newBuilder(getWaterMaterial(), false, false, true);
+        return waterBuilder;
+    };
+    const getBuilder = (materialKey, block, isTopFace) => {
+        let b = builders[materialKey];
+        if (!b) { b = newBuilder(getBlockMaterial(block, isTopFace), true, false, false); builders[materialKey] = b; }
+        return b;
+    };
+    const getFlowerBuilder = (type) => {
+        let b = flowerBuilders[type];
+        if (!b) { b = newBuilder(createFlowerPlaneMaterial(type), false, false, false); flowerBuilders[type] = b; }
+        return b;
     };
 
-    chunkData.forEach((column, x) => {
-        column.forEach((row, z) => {
-            row.forEach((blockData, y) => {
-                const block = blockData.block;
-                if (!block || block === 'air') return;
+    // Block name at LOCAL chunk coords. Interior reads the chunk array directly
+    // (fast); only the surrounding 1-block ring falls back to getChunk.
+    const blockAtLocal = (lx, ly, lz) => {
+        if (ly < 0 || ly >= H) return 'air';
+        if (lx >= 0 && lx < CHUNK_SIZE && lz >= 0 && lz < CHUNK_SIZE) {
+            const c = chunkData[lx][lz][ly];
+            return c ? c.block : 'air';
+        }
+        const wx = baseX + lx;
+        const wz = baseZ + lz;
+        const cx = Math.floor(wx / CHUNK_SIZE);
+        const cz = Math.floor(wz / CHUNK_SIZE);
+        const ch = getChunk(cx, cz);
+        if (!ch) return 'air';
+        const cell = ch[wx - cx * CHUNK_SIZE]?.[wz - cz * CHUNK_SIZE]?.[ly];
+        return cell ? cell.block : 'air';
+    };
 
-                const posX = chunkX * CHUNK_SIZE + x;
-                const posY = y;
-                const posZ = chunkZ * CHUNK_SIZE + z;
+    // AO occluder test (1 = solid cube). Air, water and flowers don't occlude.
+    // Only "flower_" blocks start with 'f', so a char check replaces startsWith.
+    const isOcc = (lx, ly, lz) => {
+        const b = blockAtLocal(lx, ly, lz);
+        if (b === 'air' || b === 'water' || b.charCodeAt(0) === 102) return 0;
+        return 1;
+    };
 
-                if (block.startsWith('flower_')) {
-                    spawnFlowerInstance(scene, posX, posY, posZ, block);
-                    return;
+    // Water column depth in blocks (down from surface ly), capped. Cached per
+    // column so it's scanned only once per chunk build.
+    const rawCache = new Map();
+    const waterDepth = (cx, cz, ly) => {
+        const key = cx + ',' + cz + ',' + ly;
+        const hit = rawCache.get(key);
+        if (hit !== undefined) return hit;
+        let d = 0;
+        while (d < WATER_MAX_DEPTH && blockAtLocal(cx, ly - d, cz) === 'water') d++;
+        rawCache.set(key, d);
+        return d;
+    };
+
+    const waterPathAtCorner = (lx, lz, ly, sx, sz) => {
+        let sum = 0;
+        let weightSum = 0;
+        const cornerX = lx + sx * 0.5;
+        const cornerZ = lz + sz * 0.5;
+
+        for (let oz = -WATER_PATH_BLUR_RADIUS; oz <= WATER_PATH_BLUR_RADIUS; oz++) {
+            for (let ox = -WATER_PATH_BLUR_RADIUS; ox <= WATER_PATH_BLUR_RADIUS; ox++) {
+                const cx = lx + ox;
+                const cz = lz + oz;
+                const d = waterDepth(cx, cz, ly);
+                if (d <= 0) continue;
+
+                const dx = cx - cornerX;
+                const dz = cz - cornerZ;
+                const weight = Math.exp(-(dx * dx + dz * dz) * WATER_PATH_BLUR_FALLOFF);
+                sum += d * weight;
+                weightSum += weight;
+            }
+        }
+
+        return weightSum > 0 ? sum / weightSum : waterDepth(lx, lz, ly);
+    };
+
+    const waterPathCorners = (lx, lz, ly) => [
+        waterPathAtCorner(lx, lz, ly, -1, -1),
+        waterPathAtCorner(lx, lz, ly,  1, -1),
+        waterPathAtCorner(lx, lz, ly, -1,  1),
+        waterPathAtCorner(lx, lz, ly,  1,  1),
+    ];
+
+    const emitFace = (block, lx, ly, lz, isTopFace, direction, yShift) => {
+        const wx = baseX + lx, wy = ly + yShift, wz = baseZ + lz;
+
+        if (block === 'water') {
+            addWaterFace(getWaterBuilder(), direction, wx, wy, wz, waterPathCorners(lx, lz, ly));
+            return;
+        }
+
+        const materialKey = block === 'grass' && isTopFace ? 'grass_top' : block;
+        const ao = computeFaceAO(direction, lx, ly, lz, isOcc);
+        const layer = getLayer(materialKey);
+        if (layer >= 0) {
+            addFace(getAtlasBuilder(), direction, wx, wy, wz, ao, layer);
+        } else {
+            addFace(getBuilder(materialKey, block, isTopFace), direction, wx, wy, wz, ao);
+        }
+    };
+
+    for (let x = 0; x < CHUNK_SIZE; x++) {
+        const column = chunkData[x];
+        for (let z = 0; z < CHUNK_SIZE; z++) {
+            const row = column[z];
+            for (let y = 0; y < H; y++) {
+                const cell = row[y];
+                const block = cell && cell.block;
+                if (!block || block === 'air') continue;
+
+                if (block.charCodeAt(0) === 102 /* 'f' */ && block.startsWith('flower_')) {
+                    addFlower(getFlowerBuilder(block), baseX + x, y, baseZ + z, block);
+                    continue;
                 }
 
                 if (block.includes('_glowing_')) {
                     const parts = block.split('_');
                     const colorHex = `#${parts[parts.length - 2]}`;
                     const intensity = parseFloat(parts[parts.length - 1]);
-
                     if (intensity && colorHex) {
-                        const color = new THREE.Color(colorHex); 
-                        const light = new THREE.PointLight(color, intensity, 5);
-                        light.position.set(posX, posY, posZ);
+                        const light = new THREE.PointLight(new THREE.Color(colorHex), intensity, 5);
+                        light.position.set(baseX + x, y, baseZ + z);
+                        light.visible = false; // updateLights() decides which are active
                         scene.add(light);
+                        lights.push(light);
+                        _allLights.push(light);
                     }
                 }
 
-                // Відкориговані орієнтації для кожної грані
-                const neighbors = [
-                    { offset: [-1, 0, 0], rotation: [0, -Math.PI / 2, 0], isTopFace: false, direction: 'left' },
-                    { offset: [1, 0, 0],  rotation: [0, Math.PI / 2, 0],  isTopFace: false, direction: 'right' },
-                    { offset: [0, -1, 0], rotation: [Math.PI / 2, 0, 0],  isTopFace: false, direction: 'down' },
-                    { offset: [0, 1, 0],  rotation: [-Math.PI / 2, 0, 0], isTopFace: true,  direction: 'up' },
-                    { offset: [0, 0, -1], rotation: [0, Math.PI, 0],       isTopFace: false, direction: 'back' },
-                    { offset: [0, 0, 1],  rotation: [0, 0, 0],             isTopFace: false, direction: 'front' },
-                ];
+                const isWater = block === 'water';
 
-                const isEdgeBlock = x === 0 || x === CHUNK_SIZE - 1 || z === 0 || z === CHUNK_SIZE - 1;
+                for (let n = 0; n < 6; n++) {
+                    const nb = NEIGHBORS[n];
+                    const off = nb.offset;
+                    const neighborBlock = blockAtLocal(x + off[0], y + off[1], z + off[2]);
 
-                if (isEdgeBlock) {
-                    neighbors.forEach(({ offset, rotation, isTopFace, direction }) => {
-                        let [nx, ny, nz] = [x + offset[0], y + offset[1], z + offset[2]];
+                    const exposed = neighborBlock === 'air' ||
+                        (neighborBlock.charCodeAt(0) === 102 && neighborBlock.startsWith('flower_'));
 
-                        let neighborBlock = 'air';
-                        if (
-                            nx >= 0 && nx < CHUNK_SIZE &&
-                            nz >= 0 && nz < CHUNK_SIZE &&
-                            ny >= 0 && ny < chunkData[0][0].length
-                        ) {
-                            neighborBlock = chunkData[nx][nz][ny].block;
+                    if (isWater) {
+                        if (nb.isTopFace && exposed) {
+                            emitFace(block, x, y, z, true, nb.direction, -cubeSize / 8);
                         }
-
-                        let neighborChunkX = chunkX;
-                        let neighborChunkZ = chunkZ;
-                        let nxAligned = nx;
-                        let nzAligned = nz;
-
-                        if (direction === 'left' && nx < 0) {
-                            neighborChunkX = chunkX - 1;
-                            nxAligned = CHUNK_SIZE - 1;
-                        } else if (direction === 'right' && nx >= CHUNK_SIZE) {
-                            neighborChunkX = chunkX + 1;
-                            nxAligned = 0;
-                        }
-
-                        if (direction === 'back' && nz < 0) {
-                            neighborChunkZ = chunkZ - 1;
-                            nzAligned = CHUNK_SIZE - 1;
-                        } else if (direction === 'front' && nz >= CHUNK_SIZE) {
-                            neighborChunkZ = chunkZ + 1;
-                            nzAligned = 0;
-                        }
-
-                        const alignedChunkData = getChunk(neighborChunkX, neighborChunkZ);
-                        let alignedBlock = 'air';
-
-                        if (
-                            alignedChunkData &&
-                            nxAligned >= 0 && nxAligned < CHUNK_SIZE &&
-                            nzAligned >= 0 && nzAligned < CHUNK_SIZE &&
-                            ny >= 0 && ny < alignedChunkData[0][0].length
-                        ) {
-                            alignedBlock = alignedChunkData[nxAligned][nzAligned][ny].block;
-                        }
-
-                        const isExposed = (neighborBlock === 'air' || neighborBlock.startsWith('flower_')) &&
-                                          (alignedBlock === 'air' || alignedBlock.startsWith('flower_'));
-
-                        if (block === 'water' && isTopFace && isExposed) {
-                            renderFace(block, posX, posY - cubeSize / 8, posZ, offset, rotation, true, direction);
-                        } else if (block !== 'water' && (isExposed || neighborBlock === 'water' || alignedBlock === 'water')) {
-                            renderFace(block, posX, posY, posZ, offset, rotation, isTopFace, direction);
-                        }
-                    });
-                } else {
-                    neighbors.forEach(({ offset, rotation, isTopFace, direction }) => {
-                        const [nx, ny, nz] = [x + offset[0], y + offset[1], z + offset[2]];
-
-                        const neighborBlock =
-                            nx < 0 || nx >= CHUNK_SIZE ||
-                            nz < 0 || nz >= CHUNK_SIZE ||
-                            ny < 0 || ny >= chunkData[0][0].length
-                                ? 'air'
-                                : chunkData[nx][nz][ny].block;
-
-                        const isExposed = neighborBlock === 'air' || neighborBlock.startsWith('flower_');
-
-                        if (block === 'water' && isTopFace && isExposed) {
-                            renderFace(block, posX, posY - cubeSize / 8, posZ, offset, rotation, true, direction);
-                        } else if (block !== 'water' && (isExposed || neighborBlock === 'water')) {
-                            renderFace(block, posX, posY, posZ, offset, rotation, isTopFace, direction);
-                        }
-                    });
+                    } else if (exposed || neighborBlock === 'water') {
+                        emitFace(block, x, y, z, nb.isTopFace, nb.direction, 0);
+                    }
                 }
-            });
-        });
-    });
-
-    Object.values(meshes).forEach(instancedMeshes => {
-        instancedMeshes.forEach(mesh => {
-            mesh.instanceMatrix.needsUpdate = true;
-        });
-    });
-}
-
-
-
-export function renderTerrain(scene) {
-    for (let i = -Math.round(numChunksX/2); i < Math.round(numChunksX/2); i++) {
-        for (let j = -Math.round(numChunksZ/2); j < Math.round(numChunksZ/2); j++) {
-            renderChunk(scene, i, j);
+            }
         }
+    }
+
+    const meshes = [];
+    const pushMesh = (b) => {
+        const mesh = finalizeBuilder(b);
+        if (mesh) { scene.add(mesh); meshes.push(mesh); }
     };
+
+    if (atlasBuilder) pushMesh(atlasBuilder);          // one draw call for all atlased blocks
+    for (const k in builders) pushMesh(builders[k]);   // special blocks (ice/gold/berry)
+    for (const k in flowerBuilders) pushMesh(flowerBuilders[k]);
+    if (waterBuilder) pushMesh(waterBuilder);          // transparent water last
+
+    chunkMeshes[chunkKey(chunkX, chunkZ)] = { meshes, lights };
 }
+
+
+// Remove a chunk's meshes/lights from the scene and free their geometries.
+// Materials are shared and cached, so they are intentionally left untouched.
+function clearChunk(scene, chunkX, chunkZ) {
+    const key = chunkKey(chunkX, chunkZ);
+    const entry = chunkMeshes[key];
+    if (!entry) return;
+
+    entry.meshes.forEach((mesh) => {
+        scene.remove(mesh);
+        if (mesh.geometry) mesh.geometry.dispose();
+    });
+    entry.lights.forEach((light) => {
+        scene.remove(light);
+        const i = _allLights.indexOf(light);
+        if (i !== -1) _allLights.splice(i, 1);
+    });
+
+    delete chunkMeshes[key];
+}
+
+
+// Tear down and rebuild a single chunk (re-evaluating faces, AO and lighting).
+export function rebuildChunk(scene, chunkX, chunkZ) {
+    clearChunk(scene, chunkX, chunkZ);
+    renderChunk(scene, chunkX, chunkZ);
+}
+
+
+// Sea level: generation fills water at y < 8, so the top water layer is y = 7.
+const WATER_LEVEL = 7;
+const FLOOD_CAP = 4096; // max cells one break can flood (safety bound)
+
+// Add the 3x3 chunk neighbourhood of a world column to a set (AO/faces of a
+// changed block can affect chunks up to one voxel away, incl. diagonally).
+function addAffectedChunks(set, wx, wz) {
+    for (let dx = -1; dx <= 1; dx++) {
+        for (let dz = -1; dz <= 1; dz++) {
+            set.add(chunkKey(Math.floor((wx + dx) / 16), Math.floor((wz + dz) / 16)));
+        }
+    }
+}
+
+function hasWaterNeighbor(x, y, z) {
+    return getBlockAt(x - 1, y, z) === 'water' || getBlockAt(x + 1, y, z) === 'water' ||
+           getBlockAt(x, y, z - 1) === 'water' || getBlockAt(x, y, z + 1) === 'water' ||
+           getBlockAt(x, y - 1, z) === 'water' || getBlockAt(x, y + 1, z) === 'water';
+}
+
+// Simple water fill (no flow levels): flood air cells at/below sea level that
+// connect to existing water, so digging next to water lets it pour in and find
+// its level. Records every touched chunk in `affected`.
+function floodWater(sx, sy, sz, affected) {
+    if (sy > WATER_LEVEL || getBlockAt(sx, sy, sz) !== 'air') return;
+    if (!hasWaterNeighbor(sx, sy, sz)) return;
+
+    const queue = [[sx, sy, sz]];
+    const seen = new Set([`${sx},${sy},${sz}`]);
+    let head = 0;
+    let count = 0;
+
+    while (head < queue.length && count < FLOOD_CAP) {
+        const [x, y, z] = queue[head++];
+        if (y > WATER_LEVEL || getBlockAt(x, y, z) !== 'air') continue;
+        if (!setBlock(x, y, z, 'water')) continue; // chunk not loaded
+        addAffectedChunks(affected, x, z);
+        count++;
+
+        const nb = [[x - 1, y, z], [x + 1, y, z], [x, y, z - 1], [x, y, z + 1], [x, y - 1, z], [x, y + 1, z]];
+        for (let i = 0; i < 6; i++) {
+            const [nx, ny, nz] = nb[i];
+            if (ny < 0 || ny > WATER_LEVEL) continue;
+            const k = `${nx},${ny},${nz}`;
+            if (seen.has(k)) continue;
+            seen.add(k);
+            if (getBlockAt(nx, ny, nz) === 'air') queue.push([nx, ny, nz]);
+        }
+    }
+}
+
+// Break the block at integer world coordinates: clear the voxel, let adjacent
+// water flood the hole, and rebuild every affected chunk (faces, AO, lighting).
+export function breakBlock(scene, worldX, worldY, worldZ) {
+    if (!setBlock(worldX, worldY, worldZ, 'air')) return false;
+
+    const affected = new Set();
+    addAffectedChunks(affected, worldX, worldZ);
+
+    floodWater(worldX, worldY, worldZ, affected);
+
+    affected.forEach((key) => {
+        const [cx, cz] = key.split(',').map(Number);
+        if (getChunk(cx, cz)) rebuildChunk(scene, cx, cz);
+    });
+
+    return true;
+}
+
+
+// --- Infinite world streaming -----------------------------------------------
+
+const _dirtyChunks = new Set(); // built chunks that need rebuilding (e.g. tree spill)
+const BUILD_BUDGET = 2;         // max chunk meshes built per update (avoids hitches)
+
+// Keep only the nearest MAX_ACTIVE_LIGHTS point lights visible. The visible
+// count stays constant once enough lights exist, so the shader isn't recompiled.
+export function updateLights(camX, camY, camZ) {
+    const n = _allLights.length;
+    if (n <= MAX_ACTIVE_LIGHTS) {
+        for (let i = 0; i < n; i++) _allLights[i].visible = true;
+        return;
+    }
+    for (let i = 0; i < n; i++) {
+        const p = _allLights[i].position;
+        const dx = p.x - camX, dy = p.y - camY, dz = p.z - camZ;
+        _allLights[i]._dist = dx * dx + dy * dy + dz * dz;
+    }
+    _allLights.sort((a, b) => a._dist - b._dist);
+    for (let i = 0; i < n; i++) _allLights[i].visible = i < MAX_ACTIVE_LIGHTS;
+}
+
+function markNeighboursDirty(fx, fz) {
+    for (let dx = -1; dx <= 1; dx++) {
+        for (let dz = -1; dz <= 1; dz++) {
+            const key = chunkKey(fx + dx, fz + dz);
+            if (chunkMeshes[key]) _dirtyChunks.add(key);
+        }
+    }
+}
+
+function buildChunkMesh(scene, cx, cz) {
+    // Generate decorations for this chunk and its neighbours so cross-chunk tree
+    // canopies are present before the mesh is built. If a neighbour's features
+    // are generated now, its spill can dirty already-built chunks -> rebuild them.
+    for (let dx = -1; dx <= 1; dx++) {
+        for (let dz = -1; dz <= 1; dz++) {
+            if (ensureChunkFeatures(cx + dx, cz + dz)) {
+                markNeighboursDirty(cx + dx, cz + dz);
+            }
+        }
+    }
+    rebuildChunk(scene, cx, cz);
+    _dirtyChunks.delete(chunkKey(cx, cz));
+}
+
+// Stream chunk meshes around a centre chunk: unload distant ones, build the
+// nearest missing/dirty ones (bounded per call so the frame rate stays smooth).
+export function updateChunks(scene, centerCX, centerCZ, renderDistance) {
+    const unloadR = renderDistance + 1;
+
+    // Unload meshes that drifted out of range (cheap; do them all).
+    for (const key of Object.keys(chunkMeshes)) {
+        const [cx, cz] = key.split(',').map(Number);
+        if (Math.abs(cx - centerCX) > unloadR || Math.abs(cz - centerCZ) > unloadR) {
+            clearChunk(scene, cx, cz);
+            _dirtyChunks.delete(key);
+        }
+    }
+
+    // Collect missing/dirty chunks in range, nearest first.
+    const todo = [];
+    for (let dx = -renderDistance; dx <= renderDistance; dx++) {
+        for (let dz = -renderDistance; dz <= renderDistance; dz++) {
+            const cx = centerCX + dx;
+            const cz = centerCZ + dz;
+            const key = chunkKey(cx, cz);
+            if (!chunkMeshes[key] || _dirtyChunks.has(key)) {
+                todo.push({ cx, cz, d: dx * dx + dz * dz });
+            }
+        }
+    }
+    todo.sort((a, b) => a.d - b.d);
+
+    for (let i = 0; i < todo.length && i < BUILD_BUDGET; i++) {
+        buildChunkMesh(scene, todo[i].cx, todo[i].cz);
+    }
+}
+
+
 
 
 export function renderClouds(scene) {

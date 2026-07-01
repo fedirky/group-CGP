@@ -8,7 +8,9 @@ import { OutputPass } from './postprocessing/OutputPass.js';
 import { ShaderPass } from './postprocessing/ShaderPass.js';
 import { FXAAShader } from './shaders/FXAAShader.js';
 
-import { renderTerrain, renderClouds } from './terrain_renderer.js';
+import { renderClouds, breakBlock, updateChunks, updateLights } from './terrain_renderer.js';
+import { raycastVoxel } from './collision.js';
+import { buildBlockAtlas } from './blockAtlas.js';
 
 import { MinecraftControls } from './MinecraftControls.js';
 import { updateLighting, 
@@ -16,7 +18,6 @@ import { updateLighting,
 import { createGradientSky } from './GradientSky.js';
 import { isSimulationPlaying, updateUI } from './ui.js'; 
 import { getSimulatedTime } from './timeState.js';
-import { loadHotAirBalloons, updateHotAirBalloons } from './hotAirBalloons.js';
 import { createFireflies, updateFireflies } from './fireFlies.js';
 import { createAurora, updateAurora } from './aurora.js';
 import { toggleAO } from './voxelAO.js';
@@ -66,9 +67,15 @@ scene.add(ambientLight);
 const fogDensity = Math.sqrt(-Math.log(0.0001) / Math.pow(8 * 16, 2));
 scene.fog = new THREE.FogExp2(0x87CEEB, fogDensity); 
 
-renderTerrain(scene);
 const cloudGroup = renderClouds(scene);
 cloudGroup.position.set(0,0,0);
+
+// Render distance (in chunks) for the infinite world; editable in the menu.
+let renderDistance = 6;
+
+// The block texture-array atlas must finish loading before chunks can be built.
+let atlasReady = false;
+buildBlockAtlas().then(() => { atlasReady = true; });
 
 let lastMinute = null; // track minute changes
 
@@ -145,7 +152,6 @@ function setWhiteTextureDebug(enabled) {
 }
 
 export const { skyMesh, skyMaterial } = createGradientSky(scene);
-loadHotAirBalloons(scene);
 createFireflies(scene);
 createAurora(scene);
 
@@ -165,10 +171,10 @@ composer.addPass(outputPass);
 function updateComposerSize() {
     const width = window.innerWidth;
     const height = window.innerHeight;
-    
+
     renderer.setSize(width, height); // Set renderer size
     composer.setSize(width, height); // Set composer size
-    
+
     fxaaPass.material.uniforms['resolution'].value.set(1 / width, 1 / height);
 }
 
@@ -252,6 +258,33 @@ document.addEventListener('pointerlockchange', () => {
 
 refreshModeButtons();
 
+// Render distance slider.
+const rdSlider = document.getElementById('render-distance-slider');
+const rdValue = document.getElementById('render-distance-value');
+rdSlider.value = String(renderDistance);
+rdValue.textContent = String(renderDistance);
+rdSlider.addEventListener('input', () => {
+    renderDistance = parseInt(rdSlider.value, 10);
+    rdValue.textContent = String(renderDistance);
+});
+
+
+// --- Block breaking: left click while playing removes the targeted block ---
+const _rayDir = new THREE.Vector3();
+const BREAK_REACH = 6;
+
+renderer.domElement.addEventListener('mousedown', (event) => {
+    // Only when actually in the world (pointer locked) and on left click.
+    if (document.pointerLockElement !== renderer.domElement) return;
+    if (event.button !== 0) return;
+
+    camera.getWorldDirection(_rayDir);
+    const hit = raycastVoxel(camera.position, _rayDir, BREAK_REACH);
+    if (hit) {
+        breakBlock(scene, hit.x, hit.y, hit.z);
+    }
+});
+
 
 /*const fireflies = new FireFlies(scene, {
     groupCount: 2,
@@ -270,6 +303,14 @@ function animate() {
     requestAnimationFrame(animate);
     const delta = Math.min(clock.getDelta(), 0.05);
     controls.update(delta);
+
+    // Stream the infinite world around the player (chunk coords from position).
+    if (atlasReady) {
+        const centerCX = Math.floor(camera.position.x / 16);
+        const centerCZ = Math.floor(camera.position.z / 16);
+        updateChunks(scene, centerCX, centerCZ, renderDistance);
+        updateLights(camera.position.x, camera.position.y, camera.position.z);
+    }
 
     let currentTime;
 
@@ -301,14 +342,11 @@ function animate() {
         cloudGroup.position.x += spreadDistance;
     }
 
-    // Fade balloons in and out based on time
-    updateHotAirBalloons(currentTime);
-
     updateFireflies();
 
     updateAurora();
 
-    composer.render();    
+    composer.render();
 
     stats.forEach(stat => stat.end());
 }
