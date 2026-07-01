@@ -8,15 +8,16 @@ import { OutputPass } from './postprocessing/OutputPass.js';
 import { ShaderPass } from './postprocessing/ShaderPass.js';
 import { FXAAShader } from './shaders/FXAAShader.js';
 
-import { renderClouds, breakBlock, updateChunks, updateLights } from './terrain_renderer.js';
+import { renderClouds, updateChunks, updateLights } from './terrain_renderer.js';
+import { breakBlock, placeBlock } from './blockActions.js';
 import { raycastVoxel } from './collision.js';
-import { buildBlockAtlas } from './blockAtlas.js';
+import { buildBlockAtlas, setAtlasWhiteTextureDebug } from './blockAtlas.js';
 
 import { MinecraftControls } from './MinecraftControls.js';
 import { updateLighting, 
          setTestMode } from './dayNightCycle.js';
 import { createGradientSky } from './GradientSky.js';
-import { isSimulationPlaying, updateUI } from './ui.js'; 
+import { isSimulationPlaying, updateUI } from './ui/dayNightWidget.js'; 
 import { getSimulatedTime } from './timeState.js';
 import { createFireflies, updateFireflies } from './fireFlies.js';
 import { createAurora, updateAurora } from './aurora.js';
@@ -102,6 +103,7 @@ function countVertices() {
 
 function setWhiteTextureDebug(enabled) {
     whiteTextureDebugEnabled = enabled;
+    setAtlasWhiteTextureDebug(enabled);
 
     scene.traverse((object) => {
         if (!object.material) return;
@@ -119,6 +121,7 @@ function setWhiteTextureDebug(enabled) {
                     roughnessMap: material.roughnessMap || null,
                     metalnessMap: material.metalnessMap || null,
                     emissiveMap: material.emissiveMap || null,
+                    bumpScale: 'bumpScale' in material ? material.bumpScale : null,
                     color: material.color ? material.color.clone() : null,
                     emissive: material.emissive ? material.emissive.clone() : null,
                 };
@@ -133,6 +136,7 @@ function setWhiteTextureDebug(enabled) {
                 if ('roughnessMap' in material) material.roughnessMap = null;
                 if ('metalnessMap' in material) material.metalnessMap = null;
                 if ('emissiveMap' in material) material.emissiveMap = null;
+                if ('bumpScale' in material) material.bumpScale = 0;
                 if (material.color) material.color.set(0xffffff);
                 if (material.emissive) material.emissive.set(0x000000);
             } else {
@@ -142,6 +146,7 @@ function setWhiteTextureDebug(enabled) {
                 if ('roughnessMap' in material) material.roughnessMap = original.roughnessMap;
                 if ('metalnessMap' in material) material.metalnessMap = original.metalnessMap;
                 if ('emissiveMap' in material) material.emissiveMap = original.emissiveMap;
+                if ('bumpScale' in material && original.bumpScale !== null) material.bumpScale = original.bumpScale;
                 if (material.color && original.color) material.color.copy(original.color);
                 if (material.emissive && original.emissive) material.emissive.copy(original.emissive);
             }
@@ -204,6 +209,8 @@ document.addEventListener('keydown', (event) => {
     } else if (event.key === 'b' || event.key === 'B') {
         setWhiteTextureDebug(!whiteTextureDebugEnabled);
         console.log(`White texture debug: ${whiteTextureDebugEnabled ? 'ON' : 'OFF'}`);
+    } else if (event.key === 'e' || event.key === 'E') {
+        toggleInventory();
     }
 });
 
@@ -217,6 +224,7 @@ const settingsMenu = document.getElementById('settings-menu');
 const modeButtons = document.querySelectorAll('.mode-button');
 const resumeButton = document.getElementById('resume-button');
 let hasPlayed = false; // only show the menu after the player has started
+let inventoryOpen = false; // inventory also releases the pointer; suppress the settings menu then
 
 function refreshModeButtons() {
     modeButtons.forEach((button) => {
@@ -251,7 +259,7 @@ document.addEventListener('pointerlockchange', () => {
     if (document.pointerLockElement === renderer.domElement) {
         hasPlayed = true;
         hideSettingsMenu();
-    } else if (hasPlayed) {
+    } else if (hasPlayed && !inventoryOpen) {
         showSettingsMenu();
     }
 });
@@ -269,19 +277,100 @@ rdSlider.addEventListener('input', () => {
 });
 
 
-// --- Block breaking: left click while playing removes the targeted block ---
+// --- Inventory (E) + selected block for placement ---------------------------
+const BLOCK_TEX = './resources/texturepacks/default/blocks';
+const PLACEABLE_BLOCKS = [
+    'grass', 'dirt', 'stone', 'sand',
+    'oak_log', 'oak_leaves', 'oak_gold_log', 'oak_gold_leaves',
+    'skyroot_log', 'skyroot_leaves', 'ice',
+];
+
+const inventory = document.getElementById('inventory');
+const inventoryGrid = document.getElementById('inventory-grid');
+const hotbarSlot = document.getElementById('hotbar-slot');
+let selectedBlock = PLACEABLE_BLOCKS[0];
+
+function iconUrl(block) {
+    return `url('${BLOCK_TEX}/${block}.png')`;
+}
+
+function selectBlock(block) {
+    selectedBlock = block;
+    hotbarSlot.style.backgroundImage = iconUrl(block);
+    inventoryGrid.querySelectorAll('.inv-slot').forEach((slot) => {
+        slot.classList.toggle('active', slot.dataset.block === block);
+    });
+}
+
+// Build the grid once.
+PLACEABLE_BLOCKS.forEach((block) => {
+    const slot = document.createElement('div');
+    slot.className = 'inv-slot';
+    slot.dataset.block = block;
+    slot.title = block;
+    slot.style.backgroundImage = iconUrl(block);
+    slot.addEventListener('click', () => {
+        selectBlock(block);
+        closeInventory(); // picking a block returns you to the world
+    });
+    inventoryGrid.appendChild(slot);
+});
+selectBlock(selectedBlock);
+
+function openInventory() {
+    inventoryOpen = true;
+    inventory.classList.add('visible');
+    controls.unlock(); // release the cursor so slots are clickable
+}
+
+function closeInventory() {
+    inventory.classList.remove('visible');
+    inventoryOpen = false;
+    controls.lock(); // re-enter the world (click was a user gesture)
+}
+
+function toggleInventory() {
+    if (inventoryOpen) closeInventory();
+    else openInventory();
+}
+
+
+// --- Block breaking (left click) and placing (right click) ------------------
 const _rayDir = new THREE.Vector3();
 const BREAK_REACH = 6;
 
+// Would a block at these integer coords overlap the player's collider? Prevents
+// placing a block inside yourself (which would trap you in walk mode).
+function intersectsPlayer(bx, by, bz) {
+    const hw = controls.playerHalfWidth;
+    const feetY = camera.position.y - controls.eyeHeight;
+    return camera.position.x - hw < bx + 0.5 && camera.position.x + hw > bx - 0.5 &&
+           camera.position.z - hw < bz + 0.5 && camera.position.z + hw > bz - 0.5 &&
+           feetY < by + 0.5 && feetY + controls.playerHeight > by - 0.5;
+}
+
 renderer.domElement.addEventListener('mousedown', (event) => {
-    // Only when actually in the world (pointer locked) and on left click.
-    if (document.pointerLockElement !== renderer.domElement) return;
-    if (event.button !== 0) return;
+    // If the pointer isn't locked (e.g. just closed the inventory/menu), any
+    // click re-locks it instead of interacting — otherwise right-click, which
+    // doesn't trigger the controls' own re-lock, would silently do nothing.
+    if (document.pointerLockElement !== renderer.domElement) {
+        if (!inventoryOpen) controls.lock();
+        return;
+    }
+
+    event.preventDefault();
 
     camera.getWorldDirection(_rayDir);
     const hit = raycastVoxel(camera.position, _rayDir, BREAK_REACH);
-    if (hit) {
+    if (!hit) return;
+
+    if (event.button === 0) {
         breakBlock(scene, hit.x, hit.y, hit.z);
+    } else if (event.button === 2 && selectedBlock) {
+        // Place into the empty cell in front of the hit face.
+        if (!intersectsPlayer(hit.px, hit.py, hit.pz)) {
+            placeBlock(scene, hit.px, hit.py, hit.pz, selectedBlock);
+        }
     }
 });
 

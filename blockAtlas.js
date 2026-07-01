@@ -34,6 +34,7 @@ const ATLAS_BLOCKS = [
 const LAYER_OF = new Map(ATLAS_BLOCKS.map((b, i) => [b.key, i]));
 
 let atlasMaterial = null;
+const whiteTextureDebugUniform = { value: 0.0 };
 
 /** Layer index for a material key, or -1 if the block isn't atlased. */
 export function getLayer(materialKey) {
@@ -44,6 +45,10 @@ export function getLayer(materialKey) {
 /** The shared atlas material (null until buildBlockAtlas() resolves). */
 export function getAtlasMaterial() {
     return atlasMaterial;
+}
+
+export function setAtlasWhiteTextureDebug(enabled) {
+    whiteTextureDebugUniform.value = enabled ? 1.0 : 0.0;
 }
 
 
@@ -115,6 +120,7 @@ function makeAtlasMaterial(colorArray, bumpArray) {
         shader.uniforms.uAtlas = { value: colorArray };
         shader.uniforms.uBumpAtlas = { value: bumpArray };
         shader.uniforms.uAOEnabled = aoUniforms.uAOEnabled;
+        shader.uniforms.uWhiteTextureDebug = whiteTextureDebugUniform;
 
         shader.vertexShader = `
             attribute float layer;
@@ -135,6 +141,7 @@ function makeAtlasMaterial(colorArray, bumpArray) {
             uniform sampler2DArray uAtlas;
             uniform sampler2DArray uBumpAtlas;
             uniform float uAOEnabled;
+            uniform float uWhiteTextureDebug;
             varying float vLayer;
             varying float vAoShade;
         ` + shader.fragmentShader;
@@ -144,6 +151,7 @@ function makeAtlasMaterial(colorArray, bumpArray) {
             '#include <map_fragment>',
             `vec4 sampledDiffuseColor = texture( uAtlas, vec3( vMapUv, vLayer ) );
             sampledDiffuseColor.rgb = pow( sampledDiffuseColor.rgb, vec3( 2.2 ) );
+            sampledDiffuseColor = mix(sampledDiffuseColor, vec4(1.0), uWhiteTextureDebug);
             diffuseColor *= sampledDiffuseColor;`
         );
 

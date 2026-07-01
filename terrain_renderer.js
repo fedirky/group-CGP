@@ -1,7 +1,6 @@
 import * as THREE from './three.r168.module.js';
 
-import { getChunk, setBlock, ensureChunkFeatures } from './terrain_generator.js';
-import { getBlockAt } from './collision.js';
+import { getChunk, ensureChunkFeatures } from './terrain_generator.js';
 
 import { computeFaceAO, patchMaterialWithAO } from './voxelAO.js';
 
@@ -605,76 +604,6 @@ function clearChunk(scene, chunkX, chunkZ) {
 export function rebuildChunk(scene, chunkX, chunkZ) {
     clearChunk(scene, chunkX, chunkZ);
     renderChunk(scene, chunkX, chunkZ);
-}
-
-
-// Sea level: generation fills water at y < 8, so the top water layer is y = 7.
-const WATER_LEVEL = 7;
-const FLOOD_CAP = 4096; // max cells one break can flood (safety bound)
-
-// Add the 3x3 chunk neighbourhood of a world column to a set (AO/faces of a
-// changed block can affect chunks up to one voxel away, incl. diagonally).
-function addAffectedChunks(set, wx, wz) {
-    for (let dx = -1; dx <= 1; dx++) {
-        for (let dz = -1; dz <= 1; dz++) {
-            set.add(chunkKey(Math.floor((wx + dx) / 16), Math.floor((wz + dz) / 16)));
-        }
-    }
-}
-
-function hasWaterNeighbor(x, y, z) {
-    return getBlockAt(x - 1, y, z) === 'water' || getBlockAt(x + 1, y, z) === 'water' ||
-           getBlockAt(x, y, z - 1) === 'water' || getBlockAt(x, y, z + 1) === 'water' ||
-           getBlockAt(x, y - 1, z) === 'water' || getBlockAt(x, y + 1, z) === 'water';
-}
-
-// Simple water fill (no flow levels): flood air cells at/below sea level that
-// connect to existing water, so digging next to water lets it pour in and find
-// its level. Records every touched chunk in `affected`.
-function floodWater(sx, sy, sz, affected) {
-    if (sy > WATER_LEVEL || getBlockAt(sx, sy, sz) !== 'air') return;
-    if (!hasWaterNeighbor(sx, sy, sz)) return;
-
-    const queue = [[sx, sy, sz]];
-    const seen = new Set([`${sx},${sy},${sz}`]);
-    let head = 0;
-    let count = 0;
-
-    while (head < queue.length && count < FLOOD_CAP) {
-        const [x, y, z] = queue[head++];
-        if (y > WATER_LEVEL || getBlockAt(x, y, z) !== 'air') continue;
-        if (!setBlock(x, y, z, 'water')) continue; // chunk not loaded
-        addAffectedChunks(affected, x, z);
-        count++;
-
-        const nb = [[x - 1, y, z], [x + 1, y, z], [x, y, z - 1], [x, y, z + 1], [x, y - 1, z], [x, y + 1, z]];
-        for (let i = 0; i < 6; i++) {
-            const [nx, ny, nz] = nb[i];
-            if (ny < 0 || ny > WATER_LEVEL) continue;
-            const k = `${nx},${ny},${nz}`;
-            if (seen.has(k)) continue;
-            seen.add(k);
-            if (getBlockAt(nx, ny, nz) === 'air') queue.push([nx, ny, nz]);
-        }
-    }
-}
-
-// Break the block at integer world coordinates: clear the voxel, let adjacent
-// water flood the hole, and rebuild every affected chunk (faces, AO, lighting).
-export function breakBlock(scene, worldX, worldY, worldZ) {
-    if (!setBlock(worldX, worldY, worldZ, 'air')) return false;
-
-    const affected = new Set();
-    addAffectedChunks(affected, worldX, worldZ);
-
-    floodWater(worldX, worldY, worldZ, affected);
-
-    affected.forEach((key) => {
-        const [cx, cz] = key.split(',').map(Number);
-        if (getChunk(cx, cz)) rebuildChunk(scene, cx, cz);
-    });
-
-    return true;
 }
 
 

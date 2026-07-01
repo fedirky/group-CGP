@@ -7,7 +7,7 @@
     <style>
         body { margin: 0; overflow: hidden; }
     </style>
-    <link rel="stylesheet" href="./ui.css">
+    <link rel="stylesheet" href="./ui/dayNightWidget.css?v=3">
 </head>
 <body>
     <!-- Підключення JavaScript-файлів -->
@@ -29,25 +29,40 @@
             </div>
             <p class="settings-hint">Render distance: <span id="render-distance-value">6</span> chunks</p>
             <input type="range" id="render-distance-slider" min="2" max="16" step="1" value="6">
+
+            <div class="settings-divider"></div>
+
+            <p class="settings-hint">Time of day &mdash; drag the dial to set the hour</p>
+            <div id="day-night-widget">
+                <div id="clock-widget">
+                    <div id="clock-face">
+                        <div id="play-pause-button" class="button play"></div>
+                        <div id="dial-handle"></div>
+                    </div>
+                    <div id="time-display">
+                        <div id="time-string">00:00</div>
+                        <div id="time-label">Unknown</div>
+                    </div>
+                    <p class="settings-hint clock-hint">Cycle speed</p>
+                    <input type="range" id="speed-slider" min="1" max="200" step="1" value="30">
+                    <div id="reset-button" class="button">Reset</div>
+                </div>
+            </div>
+
             <button id="resume-button">Resume</button>
         </div>
     </div>
 
-    <!-- Day-Night Cycle Widget Container -->
-    <div id="day-night-widget">
-        <div id="clock-widget">
-            <div id="clock-face">
-                <div id="play-pause-button" class="button play"></div>
-                <div id="dial-handle"></div>
-            </div>
-            <div id="reset-button" class="button">Reset</div>
-            <input type="range" id="speed-slider" min="1" max="200" step="1" value="30">
-            <div id="time-display">
-                <div id="time-string">00:00</div>
-                <div id="time-label">Unknown</div>
-            </div>
+    <!-- Inventory / block picker (opens on E) -->
+    <div id="inventory">
+        <div id="inventory-panel">
+            <h2>Inventory</h2>
+            <div id="inventory-grid"></div>
         </div>
     </div>
+
+    <!-- Selected-block indicator (bottom hotbar slot) -->
+    <div id="hotbar"><div id="hotbar-slot"></div></div>
 
 </body>
 </html>

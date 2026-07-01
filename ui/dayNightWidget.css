@@ -1,0 +1,351 @@
+/* --- Time-of-day controls (embedded in the settings panel) --- */
+#day-night-widget {
+    margin: 0 0 20px;
+    font-family: sans-serif;
+}
+
+#clock-widget {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    color: #fff;
+}
+
+#clock-face {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    border: 3px solid rgba(255, 255, 255, 0.25);
+    border-radius: 50%;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at 50% 40%, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.25));
+}
+
+.button {
+    cursor: pointer;
+    background: #fff;
+    color: #000;
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-size: 12px;
+    display: inline-block;
+}
+
+#play-pause-button.button {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: 50%;
+    background: #fff;
+    position: relative;
+    z-index: 2;
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.45);
+    transition: transform 0.05s;
+}
+
+#play-pause-button.button:hover {
+    transform: scale(1.08);
+}
+
+#play-pause-button.play:after {
+    content: '';
+    position: absolute;
+    left: 13px;
+    top: 9px;
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 7px 0 7px 11px;
+    border-color: transparent transparent transparent #000;
+}
+
+#play-pause-button.pause:after {
+    content: '';
+    position: absolute;
+    top: 9px;
+    left: 11px;
+    width: 4px;
+    height: 14px;
+    background: #000;
+    box-shadow: 6px 0 #000;
+}
+
+#reset-button {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    padding: 8px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+#reset-button:hover {
+    background: rgba(255, 255, 255, 0.18);
+    border-color: #6fd05c;
+}
+
+#speed-slider {
+    width: 100%;
+    margin: 0;
+    cursor: pointer;
+}
+
+#time-display {
+    text-align: center;
+    line-height: 1.2;
+}
+
+#time-string {
+    font-size: 20px;
+    font-weight: bold;
+}
+
+#time-label {
+    font-size: 12px;
+    font-style: italic;
+    opacity: 0.7;
+    margin-top: 2px;
+}
+
+/* Section divider + compact hint inside the clock widget */
+.settings-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.12);
+    margin: 4px 0 18px;
+}
+
+.clock-hint {
+    margin: 0;
+}
+
+#crosshair {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 9998;
+}
+
+#crosshair::before,
+#crosshair::after {
+    content: '';
+    position: absolute;
+    background: #fff;
+    mix-blend-mode: difference;
+}
+
+/* horizontal bar */
+#crosshair::before {
+    top: 50%;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    transform: translateY(-50%);
+}
+
+/* vertical bar */
+#crosshair::after {
+    left: 50%;
+    top: 0;
+    height: 100%;
+    width: 2px;
+    transform: translateX(-50%);
+}
+
+/* --- Inventory / block picker --- */
+#inventory {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+    font-family: sans-serif;
+}
+
+#inventory.visible {
+    display: flex;
+}
+
+#inventory-panel {
+    background: rgba(20, 20, 20, 0.92);
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    padding: 20px 24px;
+    text-align: center;
+    color: #fff;
+}
+
+#inventory-panel h2 {
+    margin: 0 0 14px;
+    font-size: 20px;
+}
+
+#inventory-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 56px);
+    gap: 8px;
+    justify-content: center;
+}
+
+.inv-slot {
+    width: 56px;
+    height: 56px;
+    background-color: rgba(255, 255, 255, 0.08);
+    background-size: cover;
+    background-repeat: no-repeat;
+    image-rendering: pixelated;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: border-color 0.1s, transform 0.05s;
+}
+
+.inv-slot:hover {
+    border-color: rgba(255, 255, 255, 0.6);
+    transform: scale(1.05);
+}
+
+.inv-slot.active {
+    border-color: #6fd05c;
+    box-shadow: 0 0 8px #4a8c3f;
+}
+
+.inventory-hint {
+    margin: 14px 0 0;
+    font-size: 12px;
+    opacity: 0.7;
+}
+
+/* Selected block indicator, bottom-centre */
+#hotbar {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9997;
+    pointer-events: none;
+}
+
+#hotbar-slot {
+    width: 52px;
+    height: 52px;
+    background-color: rgba(0, 0, 0, 0.35);
+    background-size: cover;
+    image-rendering: pixelated;
+    border: 2px solid rgba(255, 255, 255, 0.55);
+    border-radius: 6px;
+}
+
+#settings-menu {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+    font-family: sans-serif;
+}
+
+#settings-menu.visible {
+    display: flex;
+}
+
+#settings-panel {
+    background: rgba(20, 20, 20, 0.92);
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    padding: 28px 32px;
+    text-align: center;
+    color: #fff;
+    min-width: 260px;
+}
+
+#settings-panel h2 {
+    margin: 0 0 18px;
+    font-size: 22px;
+}
+
+.settings-hint {
+    margin: 0 0 10px;
+    font-size: 13px;
+    opacity: 0.7;
+}
+
+#mode-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.mode-button {
+    flex: 1;
+    padding: 12px 16px;
+    font-size: 15px;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.mode-button:hover {
+    background: rgba(255, 255, 255, 0.18);
+}
+
+.mode-button.active {
+    background: #4a8c3f;
+    border-color: #6fd05c;
+}
+
+#render-distance-slider {
+    width: 100%;
+    margin: 4px 0 18px;
+    cursor: pointer;
+}
+
+#resume-button {
+    width: 100%;
+    padding: 12px;
+    font-size: 15px;
+    color: #000;
+    background: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+#resume-button:hover {
+    background: #e0e0e0;
+}
+
+#dial-handle {
+    position: absolute;
+    width: 4px;
+    height: 48px;
+    background: #6fd05c;
+    border-radius: 2px;
+    top: 50%;
+    left: 50%;
+    transform-origin: bottom center;
+    transform: translate(-50%, -100%) rotate(0deg);
+    cursor: grab;
+    z-index: 1;
+    box-shadow: 0 0 6px #4a8c3f;
+}
+
+#dial-handle:active {
+    cursor: grabbing;
+}

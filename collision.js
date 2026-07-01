@@ -48,6 +48,9 @@ function isBreakable(block) {
  * breakable block it hits, or null. `origin` and `dir` are THREE.Vector3-likes
  * (dir need not be normalised). Coordinates use the same +/-0.5 block convention
  * as everything else, so the cell containing a point p is round(p) = floor(p+0.5).
+ *
+ * The result also carries `px,py,pz` — the empty cell just before the hit (the
+ * face the ray entered through), which is where a placed block goes.
  */
 export function raycastVoxel(origin, dir, maxDistance = 6) {
     const len = Math.hypot(dir.x, dir.y, dir.z);
@@ -72,6 +75,8 @@ export function raycastVoxel(origin, dir, maxDistance = 6) {
 
     let t = 0;
     while (t <= maxDistance) {
+        const prevX = ix, prevY = iy, prevZ = iz; // cell before this step (the empty face)
+
         // Advance to the next voxel boundary along the nearest axis.
         if (tMaxX < tMaxY && tMaxX < tMaxZ) {
             ix += stepX; t = tMaxX; tMaxX += tDeltaX;
@@ -83,7 +88,7 @@ export function raycastVoxel(origin, dir, maxDistance = 6) {
 
         const block = getBlockAt(ix, iy, iz);
         if (isBreakable(block)) {
-            return { x: ix, y: iy, z: iz, block };
+            return { x: ix, y: iy, z: iz, block, px: prevX, py: prevY, pz: prevZ };
         }
     }
 
