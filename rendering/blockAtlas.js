@@ -1,6 +1,6 @@
-import * as THREE from './three.r168.module.js';
+import * as THREE from '../three.r168.module.js';
 
-import { aoUniforms } from './voxelAO.js';
+import { aoUniforms } from '../voxelAO.js';
 
 /*
  * Texture-array atlas for the common opaque Lambert blocks.
@@ -15,7 +15,7 @@ import { aoUniforms } from './voxelAO.js';
  * NOT atlased and keep their own materials in the renderer.
  */
 
-const TEX = './resources/texturepacks/default/blocks';
+const TEX = '../resources/texturepacks/default/blocks';
 const TILE = 16; // all default-pack block textures are 16x16
 
 // Order defines the array layer index of each block face.

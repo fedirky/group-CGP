@@ -1,5 +1,5 @@
-import * as THREE from './three.r168.module.js';
-import { getSimulatedTime } from './timeState.js';
+import * as THREE from '../three.r168.module.js';
+import { getSimulatedTime } from '../timeState.js';
 
 let auroraMesh = null;
 let auroraMaterial = null;

@@ -1,10 +1,9 @@
-import { getChunk, setBlock } from './terrain_generator.js';
-import { getBlockAt } from './collision.js';
-import { rebuildChunk } from './terrain_renderer.js';
+import { WATER_CONFIG, WORLD_CONFIG } from '../config.js';
+import { getBlockAt, setBlock } from './terrain_generator.js';
 
-const CHUNK_SIZE = 16;
-const WATER_LEVEL = 7;
-const FLOOD_CAP = 4096;
+const CHUNK_SIZE = WORLD_CONFIG.chunkSize;
+const WATER_LEVEL = WATER_CONFIG.level;
+const FLOOD_CAP = WATER_CONFIG.floodCap;
 
 const chunkKey = (cx, cz) => `${cx},${cz}`;
 
@@ -14,13 +13,6 @@ function addAffectedChunks(set, wx, wz) {
             set.add(chunkKey(Math.floor((wx + dx) / CHUNK_SIZE), Math.floor((wz + dz) / CHUNK_SIZE)));
         }
     }
-}
-
-function rebuildAffectedChunks(scene, affected) {
-    affected.forEach((key) => {
-        const [cx, cz] = key.split(',').map(Number);
-        if (getChunk(cx, cz)) rebuildChunk(scene, cx, cz);
-    });
 }
 
 function hasWaterNeighbor(x, y, z) {
@@ -57,26 +49,23 @@ function floodWater(sx, sy, sz, affected) {
     }
 }
 
-export function breakBlock(scene, worldX, worldY, worldZ) {
-    if (!setBlock(worldX, worldY, worldZ, 'air')) return false;
+export function breakVoxel(worldX, worldY, worldZ) {
+    if (!setBlock(worldX, worldY, worldZ, 'air')) return null;
 
     const affected = new Set();
     addAffectedChunks(affected, worldX, worldZ);
-
     floodWater(worldX, worldY, worldZ, affected);
-    rebuildAffectedChunks(scene, affected);
 
-    return true;
+    return affected;
 }
 
-export function placeBlock(scene, worldX, worldY, worldZ, type) {
+export function placeVoxel(worldX, worldY, worldZ, type) {
     const existing = getBlockAt(worldX, worldY, worldZ);
-    if (existing !== 'air' && existing !== 'water') return false;
-    if (!setBlock(worldX, worldY, worldZ, type)) return false;
+    if (existing !== 'air' && existing !== 'water') return null;
+    if (!setBlock(worldX, worldY, worldZ, type)) return null;
 
     const affected = new Set();
     addAffectedChunks(affected, worldX, worldZ);
-    rebuildAffectedChunks(scene, affected);
 
-    return true;
+    return affected;
 }

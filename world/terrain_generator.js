@@ -1,20 +1,19 @@
 import { generateTrees } from './tree_generator.js';
+import { WATER_CONFIG, WORLD_CONFIG } from '../config.js';
 
 const simplex = new SimplexNoise();
 
 const scale = 0.02;
 const heightMultiplier = 22;
 
-const chunkSize = 16;
-const numChunksX = 8;
-const numChunksZ = 8;
-
+const chunkSize = WORLD_CONFIG.chunkSize;
+const worldHeight = chunkSize * WORLD_CONFIG.worldHeightChunks;
 const chunks = {};
 
 // Block accessor bundle handed to the (pure) tree generator.
 const treeApi = {
     chunkSize,
-    worldHeight: chunkSize * 2,
+    worldHeight,
     getBlock(wx, wy, wz) {
         const cx = Math.floor(wx / chunkSize);
         const cz = Math.floor(wz / chunkSize);
@@ -35,6 +34,20 @@ const featuresDone = new Set();
 
 export function getChunk(chunkX, chunkZ) {
     return chunks[chunkX]?.[chunkZ] || null;
+}
+
+export function getBlockAt(bx, by, bz) {
+    const cx = Math.floor(bx / chunkSize);
+    const cz = Math.floor(bz / chunkSize);
+    const chunk = getChunk(cx, cz);
+    if (!chunk) return 'air';
+
+    const lx = bx - cx * chunkSize;
+    const lz = bz - cz * chunkSize;
+    if (by < 0 || by >= chunk[0][0].length) return 'air';
+
+    const cell = chunk[lx]?.[lz]?.[by];
+    return cell ? cell.block : 'air';
 }
 
 
@@ -105,17 +118,17 @@ function generateLandscape(chunkX, chunkZ) {
         for (let z = 0; z < chunkSize; z++) {
             landscape[x][z] = [];
 
-            const dirtheight = generateHeight(chunkX*16 + x, chunkZ*16 + z) / 2 + 4;
-            const stoneheight = generateHeight(chunkX*16 + x, chunkZ*16 + z) / 8 + 2;
+            const dirtheight = generateHeight(chunkX * chunkSize + x, chunkZ * chunkSize + z) / 2 + 4;
+            const stoneheight = generateHeight(chunkX * chunkSize + x, chunkZ * chunkSize + z) / 8 + 2;
 
-            for (let y = 0; y < chunkSize * 2; y++) {
+            for (let y = 0; y < worldHeight; y++) {
                 let block;
 
                 if (y < stoneheight) {
                     block = 'stone';
                 } else if (y < dirtheight) {
                     block = 'dirt';
-                } else if (y < 8) {
+                } else if (y < WATER_CONFIG.generationLevel) {
                     block = 'water'; // Water below level 11
                 } else {
                     block = 'air';

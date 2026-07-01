@@ -1,4 +1,4 @@
-import * as THREE from './three.r168.module.js';
+import * as THREE from '../three.r168.module.js';
 
 export function createGradientSky(scene) {
     const skyGeometry = new THREE.SphereGeometry(1000, 32, 32);

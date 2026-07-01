@@ -1,8 +1,9 @@
-import * as THREE from './three.r168.module.js';
-import { getSimulatedTime } from './timeState.js';
-import { skyMaterial } from './app.js';
+import * as THREE from '../three.r168.module.js';
+import { getSimulatedTime } from '../timeState.js';
+import { skyMaterial } from '../app.js';
+import { UI_CONFIG, WORLD_CONFIG } from '../config.js';
 
-const fogDensity = Math.sqrt(-Math.log(0.0001) / Math.pow(8 * 16, 2));
+const fogDensity = Math.sqrt(-Math.log(0.0001) / Math.pow(UI_CONFIG.fogChunkDistance * WORLD_CONFIG.chunkSize, 2));
 console.log(fogDensity);
 let testMode = false; // Flag to enable manual testing
 let testTime = 10;    // Default test in 24 hrs

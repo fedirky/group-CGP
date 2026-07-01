@@ -22,9 +22,9 @@ import {
 } from '../three.r168.module.js';
 import { Pass, FullScreenQuad } from './Pass.js';
 import { SimplexNoise } from './SimplexNoise.js';
-import { generateMagicSquareNoise, GTAOShader, GTAODepthShader, GTAOBlendShader } from '../shaders/GTAOShader.js';
-import { generatePdSamplePointInitializer, PoissonDenoiseShader } from '../shaders/PoissonDenoiseShader.js';
-import { CopyShader } from '../shaders/CopyShader.js';
+import { generateMagicSquareNoise, GTAOShader, GTAODepthShader, GTAOBlendShader } from '../rendering/shaders/GTAOShader.js';
+import { generatePdSamplePointInitializer, PoissonDenoiseShader } from '../rendering/shaders/PoissonDenoiseShader.js';
+import { CopyShader } from '../rendering/shaders/CopyShader.js';
 
 class GTAOPass extends Pass {
 

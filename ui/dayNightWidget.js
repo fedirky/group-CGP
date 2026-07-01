@@ -1,5 +1,5 @@
 import { getSimulatedTime, setSimulatedTime } from '../timeState.js';
-import { updateLighting } from '../dayNightCycle.js';
+import { updateLighting } from '../effects/dayNightCycle.js';
 import { scene } from '../app.js';
 
 let isPlaying = false;

@@ -1,14 +1,15 @@
-import * as THREE from './three.r168.module.js';
+import * as THREE from '../three.r168.module.js';
 
-import { getChunk, ensureChunkFeatures } from './terrain_generator.js';
+import { getChunk, ensureChunkFeatures } from '../world/terrain_generator.js';
 
-import { computeFaceAO, patchMaterialWithAO } from './voxelAO.js';
+import { computeFaceAO, patchMaterialWithAO } from '../voxelAO.js';
 
 import { getLayer, getAtlasMaterial } from './blockAtlas.js';
 import { patchWaterShader } from './shaders/WaterShader.js';
+import { RENDER_CONFIG, WATER_CONFIG, WORLD_CONFIG } from '../config.js';
 
 
-const textures = `./resources/texturepacks/default`;
+const textures = `../resources/texturepacks/default`;
 
 const globalBumpScale = 0.8;
 
@@ -26,7 +27,7 @@ const chunkKey = (cx, cz) => `${cx},${cz}`;
 // All glowing point lights currently in the world. Forward rendering evaluates
 // every visible light per fragment, so we keep only the nearest few active.
 const _allLights = [];
-const MAX_ACTIVE_LIGHTS = 6;
+const MAX_ACTIVE_LIGHTS = RENDER_CONFIG.maxActiveLights;
 
 
 // --- Precomputed face quads --------------------------------------------------
@@ -75,8 +76,8 @@ const NEIGHBORS = [
     { offset: [0, 0, 1],  isTopFace: false, direction: 'front' },
 ];
 
-const WATER_PATH_BLUR_RADIUS = 2;
-const WATER_PATH_BLUR_FALLOFF = 0.45;
+const WATER_PATH_BLUR_RADIUS = WATER_CONFIG.pathBlurRadius;
+const WATER_PATH_BLUR_FALLOFF = WATER_CONFIG.pathBlurFalloff;
 
 // A geometry accumulator for one material within one chunk.
 function newBuilder(material, withAO, withLayer, withWater) {
@@ -354,7 +355,7 @@ function addFlower(b, posX, posY, posZ, flowerType) {
 
 
 // Water column depth (in blocks) that maps to the fully-deep colour.
-const WATER_MAX_DEPTH = 5;
+const WATER_MAX_DEPTH = WATER_CONFIG.maxDepth;
 
 let waterMaterial = null;
 let waterTexture = null;
@@ -390,7 +391,7 @@ function getWaterMaterial() {
 
 function renderChunk(scene, chunkX, chunkZ) {
     const cubeSize = 1;
-    const CHUNK_SIZE = 16; // must match getChunk
+    const CHUNK_SIZE = WORLD_CONFIG.chunkSize;
 
     const chunkData = getChunk(chunkX, chunkZ);
     if (!chunkData) return;
@@ -610,7 +611,7 @@ export function rebuildChunk(scene, chunkX, chunkZ) {
 // --- Infinite world streaming -----------------------------------------------
 
 const _dirtyChunks = new Set(); // built chunks that need rebuilding (e.g. tree spill)
-const BUILD_BUDGET = 2;         // max chunk meshes built per update (avoids hitches)
+const BUILD_BUDGET = RENDER_CONFIG.buildBudget; // max chunk meshes built per update (avoids hitches)
 
 // Keep only the nearest MAX_ACTIVE_LIGHTS point lights visible. The visible
 // count stays constant once enough lights exist, so the shader isn't recompiled.

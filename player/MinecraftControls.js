@@ -1,6 +1,7 @@
-import { Controls, Euler, Vector3 } from './three.r168.module.js';
+import { Controls, Euler, Vector3 } from '../three.r168.module.js';
 
 import { isSolidAt } from './collision.js';
+import { PLAYER_CONFIG } from '../config.js';
 
 const _changeEvent = { type: 'change' };
 const _PI_2 = Math.PI / 2;
@@ -27,10 +28,10 @@ class MinecraftControls extends Controls {
 
 		super(object, domElement);
 
-		this.lookSpeed = 0.002;
-		this.movementSpeed = 10;
-		this.sprintMultiplier = 1.8;
-		this.verticalSpeedMultiplier = 0.85;
+		this.lookSpeed = PLAYER_CONFIG.defaultLookSpeed;
+		this.movementSpeed = PLAYER_CONFIG.defaultMovementSpeed;
+		this.sprintMultiplier = PLAYER_CONFIG.sprintMultiplier;
+		this.verticalSpeedMultiplier = PLAYER_CONFIG.verticalSpeedMultiplier;
 		this.minPolarAngle = 0;
 		this.maxPolarAngle = Math.PI;
 		this.isLocked = false;
@@ -40,14 +41,14 @@ class MinecraftControls extends Controls {
 
 		// Walk-mode physics, tuned to the Minecraft-like feel requested:
 		// a 1.7-block-tall player that can jump 1.3 blocks high.
-		this.walkSpeed = 4.3;             // blocks/second (Minecraft is ~4.317)
-		this.walkSprintMultiplier = 1.35;
-		this.gravity = 26;                // blocks/second^2
-		this.jumpHeight = 1.3;            // peak jump height in blocks
-		this.playerHeight = 1.7;          // collider height in blocks
-		this.eyeHeight = 1.5;             // camera height above the feet
-		this.playerHalfWidth = 0.3;       // collider half-width (0.6 wide)
-		this.maxFallSpeed = 18;           // clamp fall speed so we never tunnel a block
+		this.walkSpeed = PLAYER_CONFIG.walkSpeed;             // blocks/second (Minecraft is ~4.317)
+		this.walkSprintMultiplier = PLAYER_CONFIG.walkSprintMultiplier;
+		this.gravity = PLAYER_CONFIG.gravity;                 // blocks/second^2
+		this.jumpHeight = PLAYER_CONFIG.jumpHeight;           // peak jump height in blocks
+		this.playerHeight = PLAYER_CONFIG.playerHeight;       // collider height in blocks
+		this.eyeHeight = PLAYER_CONFIG.eyeHeight;             // camera height above the feet
+		this.playerHalfWidth = PLAYER_CONFIG.playerHalfWidth; // collider half-width
+		this.maxFallSpeed = PLAYER_CONFIG.maxFallSpeed;       // clamp fall speed so we never tunnel a block
 
 		this._velocityY = 0;
 		this._onGround = false;

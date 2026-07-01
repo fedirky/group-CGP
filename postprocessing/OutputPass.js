@@ -11,7 +11,7 @@ import {
 	SRGBTransfer
 } from '../three.r168.module.js';
 import { Pass, FullScreenQuad } from './Pass.js';
-import { OutputShader } from '../shaders/OutputShader.js';
+import { OutputShader } from '../rendering/shaders/OutputShader.js';
 
 class OutputPass extends Pass {
 

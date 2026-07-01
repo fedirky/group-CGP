@@ -1,4 +1,5 @@
-import { getChunk } from './terrain_generator.js';
+import { getBlockAt } from '../world/terrain_generator.js';
+import { PLAYER_CONFIG } from '../config.js';
 
 /*
  * Voxel collision queries for the walking player.
@@ -7,23 +8,6 @@ import { getChunk } from './terrain_generator.js';
  * (the renderer offsets each face by cubeSize/2). So the block that contains a
  * world coordinate c is Math.round(c), and that block occupies [idx-0.5, idx+0.5].
  */
-
-const CHUNK_SIZE = 16;
-
-// Block at integer world coordinates (resolves across chunk boundaries).
-export function getBlockAt(bx, by, bz) {
-    const cx = Math.floor(bx / CHUNK_SIZE);
-    const cz = Math.floor(bz / CHUNK_SIZE);
-    const chunk = getChunk(cx, cz);
-    if (!chunk) return 'air';
-
-    const lx = bx - cx * CHUNK_SIZE;
-    const lz = bz - cz * CHUNK_SIZE;
-    if (by < 0 || by >= chunk[0][0].length) return 'air';
-
-    const cell = chunk[lx]?.[lz]?.[by];
-    return cell ? cell.block : 'air';
-}
 
 /*
  * Is the block at these integer coordinates solid for collision?
@@ -52,7 +36,7 @@ function isBreakable(block) {
  * The result also carries `px,py,pz` — the empty cell just before the hit (the
  * face the ray entered through), which is where a placed block goes.
  */
-export function raycastVoxel(origin, dir, maxDistance = 6) {
+export function raycastVoxel(origin, dir, maxDistance = PLAYER_CONFIG.breakReach) {
     const len = Math.hypot(dir.x, dir.y, dir.z);
     if (len === 0) return null;
 

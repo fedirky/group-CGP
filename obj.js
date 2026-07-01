@@ -1,5 +1,5 @@
-import * as THREE from '/libs/three.r168.module.js';
-import { GLTFLoader } from '/libs/postprocessing/GLTFLoader.js';
+import * as THREE from './three.r168.module.js';
+import { GLTFLoader } from './rendering/loaders/GLTFLoader.js';
 
 // Створюємо сцену, камеру та рендерер
 const scene = new THREE.Scene();

@@ -6,22 +6,23 @@ import { EffectComposer } from './postprocessing/EffectComposer.js';
 import { RenderPass } from './postprocessing/RenderPass.js';
 import { OutputPass } from './postprocessing/OutputPass.js';
 import { ShaderPass } from './postprocessing/ShaderPass.js';
-import { FXAAShader } from './shaders/FXAAShader.js';
+import { FXAAShader } from './rendering/shaders/FXAAShader.js';
 
-import { renderClouds, updateChunks, updateLights } from './terrain_renderer.js';
-import { breakBlock, placeBlock } from './blockActions.js';
-import { raycastVoxel } from './collision.js';
-import { buildBlockAtlas, setAtlasWhiteTextureDebug } from './blockAtlas.js';
+import { renderClouds, updateChunks, updateLights } from './rendering/terrain_renderer.js';
+import { breakBlock, placeBlock } from './player/blockActions.js';
+import { raycastVoxel } from './player/collision.js';
+import { buildBlockAtlas, setAtlasWhiteTextureDebug } from './rendering/blockAtlas.js';
 
-import { MinecraftControls } from './MinecraftControls.js';
+import { MinecraftControls } from './player/MinecraftControls.js';
 import { updateLighting, 
-         setTestMode } from './dayNightCycle.js';
-import { createGradientSky } from './GradientSky.js';
+         setTestMode } from './effects/dayNightCycle.js';
+import { createGradientSky } from './effects/GradientSky.js';
 import { isSimulationPlaying, updateUI } from './ui/dayNightWidget.js'; 
 import { getSimulatedTime } from './timeState.js';
-import { createFireflies, updateFireflies } from './fireFlies.js';
-import { createAurora, updateAurora } from './aurora.js';
+import { createFireflies, updateFireflies } from './effects/fireFlies.js';
+import { createAurora, updateAurora } from './effects/aurora.js';
 import { toggleAO } from './voxelAO.js';
+import { PLAYER_CONFIG, RENDER_CONFIG, UI_CONFIG, WORLD_CONFIG } from './config.js';
 
 
 // import { FireFlies } from './utils/fire_fly/FireFly.ts';
@@ -46,7 +47,7 @@ renderer.shadowMap.enabled = true; // Enable shadow maps
 document.body.appendChild(renderer.domElement);
 
 // Camera setup
-camera.position.set(0, 16, 0);
+camera.position.set(...PLAYER_CONFIG.startPosition);
 
 // Add a directional light
 const directionalLight = new THREE.DirectionalLight(0xffffcc, 5); // White light
@@ -65,14 +66,14 @@ const ambientLight = new THREE.AmbientLight(0x404040, 15); // Soft white light
 scene.add(ambientLight);
 
 // Add fog
-const fogDensity = Math.sqrt(-Math.log(0.0001) / Math.pow(8 * 16, 2));
+const fogDensity = Math.sqrt(-Math.log(0.0001) / Math.pow(UI_CONFIG.fogChunkDistance * WORLD_CONFIG.chunkSize, 2));
 scene.fog = new THREE.FogExp2(0x87CEEB, fogDensity); 
 
 const cloudGroup = renderClouds(scene);
 cloudGroup.position.set(0,0,0);
 
 // Render distance (in chunks) for the infinite world; editable in the menu.
-let renderDistance = 6;
+let renderDistance = RENDER_CONFIG.defaultRenderDistance;
 
 // The block texture-array atlas must finish loading before chunks can be built.
 let atlasReady = false;
@@ -82,8 +83,8 @@ let lastMinute = null; // track minute changes
 
 const clock = new THREE.Clock();
 const controls = new MinecraftControls(camera, renderer.domElement);
-controls.movementSpeed = 16;
-controls.lookSpeed = 0.0022;
+controls.movementSpeed = PLAYER_CONFIG.movementSpeed;
+controls.lookSpeed = PLAYER_CONFIG.lookSpeed;
 
 const whiteTextureData = new Uint8Array([255, 255, 255, 255]);
 const whiteDebugTexture = new THREE.DataTexture(whiteTextureData, 1, 1);
@@ -337,7 +338,7 @@ function toggleInventory() {
 
 // --- Block breaking (left click) and placing (right click) ------------------
 const _rayDir = new THREE.Vector3();
-const BREAK_REACH = 6;
+const BREAK_REACH = PLAYER_CONFIG.breakReach;
 
 // Would a block at these integer coords overlap the player's collider? Prevents
 // placing a block inside yourself (which would trap you in walk mode).
@@ -395,8 +396,8 @@ function animate() {
 
     // Stream the infinite world around the player (chunk coords from position).
     if (atlasReady) {
-        const centerCX = Math.floor(camera.position.x / 16);
-        const centerCZ = Math.floor(camera.position.z / 16);
+        const centerCX = Math.floor(camera.position.x / WORLD_CONFIG.chunkSize);
+        const centerCZ = Math.floor(camera.position.z / WORLD_CONFIG.chunkSize);
         updateChunks(scene, centerCX, centerCZ, renderDistance);
         updateLights(camera.position.x, camera.position.y, camera.position.z);
     }
