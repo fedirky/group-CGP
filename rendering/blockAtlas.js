@@ -81,6 +81,8 @@ function makeArrayTexture(data, mip) {
     const tex = new THREE.DataArrayTexture(data, TILE, TILE, ATLAS_BLOCKS.length);
     tex.format = THREE.RGBAFormat;
     tex.type = THREE.UnsignedByteType;
+    tex.wrapS = THREE.RepeatWrapping; // tile the tile across greedy-merged quads
+    tex.wrapT = THREE.RepeatWrapping;
     tex.magFilter = THREE.NearestFilter;
     tex.minFilter = mip ? THREE.LinearMipmapNearestFilter : THREE.NearestFilter;
     tex.generateMipmaps = mip;

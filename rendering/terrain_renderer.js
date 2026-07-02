@@ -33,6 +33,39 @@ const chunkMeshes = {};
 
 const chunkKey = (cx, cz) => `${cx},${cz}`;
 
+// --- Debug: green face-edge overlay (toggled with the white-texture debug) -----
+// EdgesGeometry shows only quad outlines (coplanar triangle diagonals are
+// dropped), so this visualises the actual meshed quads — handy for greedy meshing.
+let _edgesDebug = false;
+const _edgeMaterial = new THREE.LineBasicMaterial({ color: 0x6fd05c });
+
+function addEdgeOverlay(mesh) {
+    if (mesh.userData.edgeOverlay) return;
+    const overlay = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry), _edgeMaterial);
+    overlay.frustumCulled = false;
+    mesh.add(overlay);
+    mesh.userData.edgeOverlay = overlay;
+}
+
+function removeEdgeOverlay(mesh) {
+    const overlay = mesh.userData.edgeOverlay;
+    if (!overlay) return;
+    mesh.remove(overlay);
+    overlay.geometry.dispose();
+    mesh.userData.edgeOverlay = null;
+}
+
+// Toggle the green edge overlay on every currently-built chunk mesh.
+export function setEdgesDebug(enabled) {
+    _edgesDebug = enabled;
+    for (const key in chunkMeshes) {
+        for (const mesh of chunkMeshes[key].meshes) {
+            if (enabled) addEdgeOverlay(mesh);
+            else removeEdgeOverlay(mesh);
+        }
+    }
+}
+
 
 // --- Precomputed face quads --------------------------------------------------
 // Corner offsets (relative to a block centre) + UVs for each of the six faces,
@@ -184,6 +217,61 @@ function addQuad(b, px, py, pz, ex, ey, ez, light) {
     b.vcount += 4;
     b.idx.push(base, base + 2, base + 1, base + 2, base + 3, base + 1);
 }
+
+// --- Greedy meshing (atlas cube faces) --------------------------------------
+// Per direction: the rotation matrix (as for unit faces) plus which world axis
+// the plane's local X / local Y / normal map to, so a WxH merged quad is built
+// exactly like a unit face, just scaled + tiled.
+const GREEDY_BASIS = {};
+(function buildGreedyBasis() {
+    const v = new THREE.Vector3();
+    const dominant = (vec) => {
+        let bi = 0, bv = 0;
+        for (let i = 0; i < 3; i++) { const c = Math.abs(vec.getComponent(i)); if (c > bv) { bv = c; bi = i; } }
+        return bi;
+    };
+    for (const dir in _FACE_DEFS) {
+        const { offset, rotation } = _FACE_DEFS[dir];
+        const m = new THREE.Matrix4().makeRotationFromEuler(
+            new THREE.Euler(rotation[0], rotation[1], rotation[2]));
+        GREEDY_BASIS[dir] = {
+            m,
+            na: offset[0] !== 0 ? 0 : offset[1] !== 0 ? 1 : 2,
+            ua: dominant(v.set(1, 0, 0).applyMatrix4(m)),
+            va: dominant(v.set(0, 1, 0).applyMatrix4(m)),
+        };
+    }
+})();
+
+// Emit one W×H merged atlas quad (uniform AO + light), with tiled UVs.
+const _gv = new THREE.Vector3();
+function addMergedFace(b, dir, cx, cy, cz, W, H, aoVal, layer, lr, lg, lb) {
+    const m = GREEDY_BASIS[dir].m;
+    const n = FACE_QUADS[dir].normal;
+    const base = b.vcount;
+    for (let k = 0; k < 4; k++) {
+        const p = _PLANE[k].p;
+        _gv.set(p[0] * W, p[1] * H, 0).applyMatrix4(m);
+        b.pos.push(cx + _gv.x + 0.5 * n[0], cy + _gv.y + 0.5 * n[1], cz + _gv.z + 0.5 * n[2]);
+        b.norm.push(n[0], n[1], n[2]);
+        b.uv.push(_PLANE[k].uv[0] * W, _PLANE[k].uv[1] * H);
+        b.shade.push(aoVal);
+        if (b.layer) b.layer.push(layer);
+        b.light.push(lr, lg, lb);
+    }
+    b.vcount += 4;
+    b.idx.push(base, base + 2, base + 1, base + 2, base + 3, base + 1);
+}
+
+const _uniform4 = (a) => a[0] === a[1] && a[1] === a[2] && a[2] === a[3];
+function _uniformLight(l) {
+    const r = l[0][0], g = l[0][1], b = l[0][2];
+    return l[1][0] === r && l[1][1] === g && l[1][2] === b &&
+           l[2][0] === r && l[2][1] === g && l[2][2] === b &&
+           l[3][0] === r && l[3][1] === g && l[3][2] === b;
+}
+const _maskEq = (a, d) => a && a.layer === d.layer && a.ao === d.ao &&
+    a.lr === d.lr && a.lg === d.lg && a.lb === d.lb;
 
 // Turn an accumulator into a Mesh (tightly-sized buffers + bounding sphere for
 // frustum culling). Returns null if nothing was emitted.
@@ -557,6 +645,9 @@ function renderChunk(scene, chunkX, chunkZ) {
                     continue;
                 }
 
+                // Atlas cube faces are emitted by the greedy pass; skip them here.
+                if (renderType === 'cube' && getLayer(block) >= 0) continue;
+
                 const isWater = renderType === 'water';
 
                 for (let n = 0; n < 6; n++) {
@@ -578,10 +669,86 @@ function renderChunk(scene, chunkX, chunkZ) {
         }
     }
 
+    // --- Greedy meshing of atlas cube faces -------------------------------
+    // For each face direction, per slice, build a 2D mask of exposed atlas
+    // faces and merge equal, UNIFORMLY-lit ones (same layer + AO + block light)
+    // into big quads; non-uniform faces (edges, near lights) stay per-face.
+    const DIMS = [CHUNK_SIZE, H, CHUNK_SIZE];
+    const gmask = new Array(CHUNK_SIZE * H); // reused; only [0, Du*Dv) used per slice
+    const gc = [0, 0, 0];
+    for (let dd = 0; dd < 6; dd++) {
+        const nb = NEIGHBORS[dd];
+        const dir = nb.direction, off = nb.offset, isTop = nb.isTopFace;
+        const gb = GREEDY_BASIS[dir];
+        const na = gb.na, ua = gb.ua, va = gb.va;
+        const Dn = DIMS[na], Du = DIMS[ua], Dv = DIMS[va];
+
+        for (let s = 0; s < Dn; s++) {
+            // Build the slice mask.
+            for (let iu = 0; iu < Du; iu++) {
+                for (let iv = 0; iv < Dv; iv++) {
+                    gc[na] = s; gc[ua] = iu; gc[va] = iv;
+                    const lx = gc[0], ly = gc[1], lz = gc[2];
+                    const mi = iu * Dv + iv;
+                    gmask[mi] = null;
+
+                    const block = blockAtLocal(lx, ly, lz);
+                    if (getRenderType(block) !== 'cube') continue;
+                    const materialKey = block === 'grass' && isTop ? 'grass_top' : block;
+                    const layer = getLayer(materialKey);
+                    if (layer < 0) continue; // atlas only
+
+                    const nBlock = blockAtLocal(lx + off[0], ly + off[1], lz + off[2]);
+                    if (!(exposesNeighborFace(nBlock) || isLiquidBlock(nBlock))) continue;
+
+                    const ao = computeFaceAO(dir, lx, ly, lz, isOcc);
+                    const light4 = faceLight4(lightField, baseX + lx, ly, baseZ + lz, dir);
+                    if (_uniform4(ao) && _uniformLight(light4)) {
+                        gmask[mi] = { layer, ao: ao[0], lr: light4[0][0], lg: light4[0][1], lb: light4[0][2] };
+                    } else {
+                        // Can't merge -> emit this face on its own now.
+                        addFace(getAtlasBuilder(), dir, baseX + lx, ly, baseZ + lz, ao, layer, light4);
+                    }
+                }
+            }
+
+            // Greedy-merge the mask into rectangles.
+            for (let iv = 0; iv < Dv; iv++) {
+                for (let iu = 0; iu < Du; iu++) {
+                    const d0 = gmask[iu * Dv + iv];
+                    if (!d0) continue;
+
+                    let w = 1;
+                    while (iu + w < Du && _maskEq(gmask[(iu + w) * Dv + iv], d0)) w++;
+
+                    let h = 1;
+                    grow: while (iv + h < Dv) {
+                        for (let k = 0; k < w; k++) {
+                            if (!_maskEq(gmask[(iu + k) * Dv + (iv + h)], d0)) break grow;
+                        }
+                        h++;
+                    }
+
+                    gc[na] = s; gc[ua] = iu + (w - 1) / 2; gc[va] = iv + (h - 1) / 2;
+                    addMergedFace(getAtlasBuilder(), dir, baseX + gc[0], gc[1], baseZ + gc[2],
+                        w, h, d0.ao, d0.layer, d0.lr, d0.lg, d0.lb);
+
+                    for (let a = 0; a < w; a++) {
+                        for (let b = 0; b < h; b++) gmask[(iu + a) * Dv + (iv + b)] = null;
+                    }
+                }
+            }
+        }
+    }
+
     const meshes = [];
     const pushMesh = (b) => {
         const mesh = finalizeBuilder(b);
-        if (mesh) { scene.add(mesh); meshes.push(mesh); }
+        if (mesh) {
+            scene.add(mesh);
+            meshes.push(mesh);
+            if (_edgesDebug) addEdgeOverlay(mesh);
+        }
     };
 
     if (atlasBuilder) pushMesh(atlasBuilder);          // all atlased blocks
@@ -601,6 +768,7 @@ function clearChunk(scene, chunkX, chunkZ) {
     if (!entry) return;
 
     entry.meshes.forEach((mesh) => {
+        removeEdgeOverlay(mesh);
         scene.remove(mesh);
         if (mesh.geometry) mesh.geometry.dispose();
     });

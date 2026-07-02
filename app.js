@@ -8,7 +8,7 @@ import { OutputPass } from './postprocessing/OutputPass.js';
 import { ShaderPass } from './postprocessing/ShaderPass.js';
 import { FXAAShader } from './rendering/shaders/FXAAShader.js';
 
-import { renderClouds, updateChunks } from './rendering/terrain_renderer.js';
+import { renderClouds, updateChunks, setEdgesDebug } from './rendering/terrain_renderer.js';
 import { breakBlock, placeBlock } from './player/blockActions.js';
 import { raycastVoxel } from './player/collision.js';
 import { buildBlockAtlas, setAtlasWhiteTextureDebug } from './rendering/blockAtlas.js';
@@ -217,6 +217,7 @@ document.addEventListener('keydown', (event) => {
         console.log(`Ambient Occlusion: ${enabled ? 'ON' : 'OFF'}`);
     } else if (event.key === 'b' || event.key === 'B') {
         setWhiteTextureDebug(!whiteTextureDebugEnabled);
+        setEdgesDebug(whiteTextureDebugEnabled); // green quad outlines alongside white textures
         console.log(`White texture debug: ${whiteTextureDebugEnabled ? 'ON' : 'OFF'}`);
     } else if (event.key === 'e' || event.key === 'E') {
         toggleInventory();
