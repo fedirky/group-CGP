@@ -1,6 +1,7 @@
 import { WATER_CONFIG, WORLD_CONFIG } from '../config.js';
 import { getBlockAt, setBlock } from './terrain_generator.js';
 import { invalidateChunkSources } from './blockLight.js';
+import { isAirBlock, isLiquidBlock, isReplaceableBlock } from '../data/blocks.js';
 
 const CHUNK_SIZE = WORLD_CONFIG.chunkSize;
 const WATER_LEVEL = WATER_CONFIG.level;
@@ -68,7 +69,7 @@ export function breakVoxel(worldX, worldY, worldZ) {
 
 export function placeVoxel(worldX, worldY, worldZ, type) {
     const existing = getBlockAt(worldX, worldY, worldZ);
-    if (existing !== 'air' && existing !== 'water') return null;
+    if (!isReplaceableBlock(existing) && !isLiquidBlock(existing)) return null;
     if (!setBlock(worldX, worldY, worldZ, type)) return null;
 
     invalidateChunkSources(Math.floor(worldX / CHUNK_SIZE), Math.floor(worldZ / CHUNK_SIZE));

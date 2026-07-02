@@ -7,6 +7,14 @@ import { computeFaceAO, patchMaterialWithAO, patchBlockLight, AO_OFFSETS } from 
 import { getLayer, getAtlasMaterial } from './blockAtlas.js';
 import { patchWaterShader } from './shaders/WaterShader.js';
 import { computeChunkLight } from '../world/blockLight.js';
+import {
+    blockTexturePath,
+    exposesNeighborFace,
+    getBlockDefinition,
+    getRenderType,
+    isLiquidBlock,
+    occludesAO,
+} from '../data/blocks.js';
 import { RENDER_CONFIG, WATER_CONFIG, WORLD_CONFIG } from '../config.js';
 
 
@@ -201,24 +209,15 @@ function getBlockTexture(block, isTopFace = false) {
 
     let texturePath, bumpPath, emissivePath;
     let texture;
+    const textureType = isTopFace && block === 'grass' ? 'topColor' : 'color';
 
-    if (block === 'grass') {
-        texturePath = isTopFace ? `${textures}/blocks/grass.png` : `${textures}/blocks/grass_side.png`;
-        bumpPath = `${textures}blocks/dirt_bump.png`;
-        emissivePath = `${textures}/blocks/no_bump.png`;
-    } else if (block === 'water') {
-        texturePath = `${textures}/blocks/water_16x16.mp4`;
-        bumpPath = `${textures}/blocks/no_bump.png`;
-        emissivePath = `${textures}/blocks/no_bump.png`;
-    } else {
-        texturePath = `${textures}/blocks/${block}.png`;
-        bumpPath = `${textures}/blocks/${block}_bump.png`;
-        emissivePath = `${textures}/blocks/${block}_emissive.png`
-    }
+    texturePath = blockTexturePath(block, textureType);
+    bumpPath = blockTexturePath(block, 'bump');
+    emissivePath = blockTexturePath(block, 'emissive');
 
     if (block === 'water') {
         const video = document.createElement('video');
-        video.src = texturePath;
+        video.src = `${textures}/blocks/water_16x16.mp4`;
         video.loop = true;
         video.muted = true;
         video.playsInline = true;
@@ -263,6 +262,8 @@ function getBlockMaterial(block, isTopFace = false) {
     const textureKey = isTopFace && block === 'grass' ? 'grass_top' : block;
 
     if (!materials[textureKey]) {
+        const def = getBlockDefinition(block);
+        const materialDef = def?.material || {};
         const { map, bumpMap, emissiveMap } = getBlockTexture(block, isTopFace);
         const baseConfig = {
             map: map,
@@ -273,25 +274,17 @@ function getBlockMaterial(block, isTopFace = false) {
 
         let materialConfig = { ...baseConfig };
 
-        if (block === 'ice') {
+        if (materialDef.type === 'phong' && materialDef.specular !== undefined) {
             Object.assign(materialConfig, {
-                shininess: 10,
-                specular: new THREE.Color(0x99ccff),
+                shininess: materialDef.shininess ?? 10,
+                specular: new THREE.Color(materialDef.specular),
             });
             materials[textureKey] = new THREE.MeshPhongMaterial(materialConfig);
-        } else if (block.includes('oak_gold')) {
+        } else if (materialDef.type === 'phong') {
             Object.assign(materialConfig, {
                 emissiveMap: emissiveMap,
-                emissive: new THREE.Color(0xA48601),
-                emissiveIntensity: 0.45,
-                depthWrite: true,
-            });
-            materials[textureKey] = new THREE.MeshPhongMaterial(materialConfig);
-        } else if (block.includes('skyroot_leaves_berry')) {
-            Object.assign(materialConfig, {
-                emissiveMap: emissiveMap,
-                emissive: new THREE.Color(0x2D3D59),
-                emissiveIntensity: 0.35,
+                emissive: new THREE.Color(materialDef.emissive ?? 0x000000),
+                emissiveIntensity: materialDef.emissiveIntensity ?? 0,
                 depthWrite: true,
             });
             materials[textureKey] = new THREE.MeshPhongMaterial(materialConfig);
@@ -309,38 +302,36 @@ function getBlockMaterial(block, isTopFace = false) {
 
 function createFlowerPlaneMaterial(flowerType) {
     if (!materials[flowerType]) {
-        const texture = textureLoader.load(`${textures}/flowers/${flowerType}.png`);
+        const def = getBlockDefinition(flowerType);
+        const materialDef = def?.material || {};
+        const texture = textureLoader.load(blockTexturePath(flowerType, 'color'));
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.minFilter = THREE.LinearMipmapNearestFilter;
         texture.magFilter = THREE.NearestFilter;
         texture.generateMipmaps = true;
 
-        materials[flowerType] = new THREE.MeshStandardMaterial({
+        const materialConfig = {
             map: texture,
             side: THREE.DoubleSide,
-            transparent: true, // Ensure transparency works for flowers
+            transparent: true,
             alphaTest: 0.5,
-        });
+        };
 
-        if (flowerType == "flower_glowberries") {
-
-            const emissive_texture = textureLoader.load(`${textures}/flowers/${flowerType}_emissive.png`);
+        if (materialDef.emissive !== undefined) {
+            const emissive_texture = textureLoader.load(blockTexturePath(flowerType, 'emissive'));
             emissive_texture.colorSpace = THREE.SRGBColorSpace;
             emissive_texture.minFilter = THREE.LinearMipmapNearestFilter;
             emissive_texture.magFilter = THREE.NearestFilter;
             emissive_texture.generateMipmaps = true;
 
-            materials[flowerType] = new THREE.MeshStandardMaterial({
-                map: texture,
-                side: THREE.DoubleSide,
-                transparent: true, // Ensure transparency works for flowers
-                alphaTest: 0.5,
+            Object.assign(materialConfig, {
                 emissiveMap: emissive_texture,
-                emissive: new THREE.Color(0xEA8931),
-                emissiveIntensity: 0.75,
+                emissive: new THREE.Color(materialDef.emissive),
+                emissiveIntensity: materialDef.emissiveIntensity ?? 0,
             });
-
         }
+
+        materials[flowerType] = new THREE.MeshStandardMaterial(materialConfig);
 
         // Flowers/grass receive baked berry light too.
         patchBlockLight(materials[flowerType]);
@@ -480,12 +471,9 @@ function renderChunk(scene, chunkX, chunkZ) {
         return cell ? cell.block : 'air';
     };
 
-    // AO occluder test (1 = solid cube). Air, water and flowers don't occlude.
-    // Only "flower_" blocks start with 'f', so a char check replaces startsWith.
+    // AO occluder test (1 = solid cube). Rules live in the block registry.
     const isOcc = (lx, ly, lz) => {
-        const b = blockAtLocal(lx, ly, lz);
-        if (b === 'air' || b === 'water' || b.charCodeAt(0) === 102) return 0;
-        return 1;
+        return occludesAO(blockAtLocal(lx, ly, lz)) ? 1 : 0;
     };
 
     // Water column depth in blocks (down from surface ly), capped. Cached per
@@ -538,7 +526,7 @@ function renderChunk(scene, chunkX, chunkZ) {
         // Smooth per-vertex block light for this face.
         const light4 = faceLight4(lightField, baseX + lx, ly, baseZ + lz, direction);
 
-        if (block === 'water') {
+        if (getRenderType(block) === 'water') {
             addWaterFace(getWaterBuilder(), direction, wx, wy, wz, waterPathCorners(lx, lz, ly), light4);
             return;
         }
@@ -562,27 +550,27 @@ function renderChunk(scene, chunkX, chunkZ) {
                 const block = cell && cell.block;
                 if (!block || block === 'air') continue;
 
-                if (block.charCodeAt(0) === 102 /* 'f' */ && block.startsWith('flower_')) {
+                const renderType = getRenderType(block);
+                if (renderType === 'cross' || renderType === 'flat') {
                     const flight = lightField.at(baseX + x, y, baseZ + z);
                     addFlower(getFlowerBuilder(block), baseX + x, y, baseZ + z, block, flight);
                     continue;
                 }
 
-                const isWater = block === 'water';
+                const isWater = renderType === 'water';
 
                 for (let n = 0; n < 6; n++) {
                     const nb = NEIGHBORS[n];
                     const off = nb.offset;
                     const neighborBlock = blockAtLocal(x + off[0], y + off[1], z + off[2]);
 
-                    const exposed = neighborBlock === 'air' ||
-                        (neighborBlock.charCodeAt(0) === 102 && neighborBlock.startsWith('flower_'));
+                    const exposed = exposesNeighborFace(neighborBlock);
 
                     if (isWater) {
                         if (nb.isTopFace && exposed) {
                             emitFace(block, x, y, z, true, nb.direction, -cubeSize / 8);
                         }
-                    } else if (exposed || neighborBlock === 'water') {
+                    } else if (exposed || isLiquidBlock(neighborBlock)) {
                         emitFace(block, x, y, z, nb.isTopFace, nb.direction, 0);
                     }
                 }

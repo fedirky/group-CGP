@@ -23,6 +23,10 @@ import { createFireflies, updateFireflies } from './effects/fireFlies.js';
 import { createAurora, updateAurora } from './effects/aurora.js';
 import { toggleAO } from './voxelAO.js';
 import { PLAYER_CONFIG, RENDER_CONFIG, UI_CONFIG, WORLD_CONFIG } from './config.js';
+import { PLACEABLE_BLOCKS, blockIconPath, isReplaceableBlock, initPlantSelectionHeights } from './data/blocks.js';
+
+// Measure plant hitbox heights from their textures (once).
+initPlantSelectionHeights();
 
 
 // import { FireFlies } from './utils/fire_fly/FireFly.ts';
@@ -283,20 +287,13 @@ rdSlider.addEventListener('input', () => {
 
 
 // --- Inventory (E) + selected block for placement ---------------------------
-const BLOCK_TEX = './resources/texturepacks/default/blocks';
-const PLACEABLE_BLOCKS = [
-    'grass', 'dirt', 'stone', 'sand',
-    'oak_log', 'oak_leaves', 'oak_gold_log', 'oak_gold_leaves',
-    'skyroot_log', 'skyroot_leaves', 'skyroot_leaves_berry_glowing_2D3D59_3', 'ice',
-];
-
 const inventory = document.getElementById('inventory');
 const inventoryGrid = document.getElementById('inventory-grid');
 const hotbarSlot = document.getElementById('hotbar-slot');
 let selectedBlock = PLACEABLE_BLOCKS[0];
 
 function iconUrl(block) {
-    return `url('${BLOCK_TEX}/${block}.png')`;
+    return `url('${blockIconPath(block)}')`;
 }
 
 function selectBlock(block) {
@@ -372,9 +369,16 @@ renderer.domElement.addEventListener('mousedown', (event) => {
     if (event.button === 0) {
         breakBlock(scene, hit.x, hit.y, hit.z);
     } else if (event.button === 2 && selectedBlock) {
-        // Place into the empty cell in front of the hit face.
-        if (!intersectsPlayer(hit.px, hit.py, hit.pz)) {
-            placeBlock(scene, hit.px, hit.py, hit.pz, selectedBlock);
+        // Minecraft rule: if we hit a replaceable block (grass/flower), the new
+        // block takes ITS cell (the plant is destroyed). Otherwise it goes into
+        // the empty cell against the face we hit. placeBlock() itself only
+        // succeeds if the target is air / a plant / liquid.
+        let placeX = hit.px, placeY = hit.py, placeZ = hit.pz;
+        if (isReplaceableBlock(hit.block)) {
+            placeX = hit.x; placeY = hit.y; placeZ = hit.z;
+        }
+        if (!intersectsPlayer(placeX, placeY, placeZ)) {
+            placeBlock(scene, placeX, placeY, placeZ, selectedBlock);
         }
     }
 });

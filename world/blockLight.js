@@ -1,6 +1,7 @@
 import * as THREE from '../three.r168.module.js';
 import { WORLD_CONFIG } from '../config.js';
 import { getBlockAt, getChunk } from './terrain_generator.js';
+import { getBlockLight, isTransparentForBlockLight } from '../data/blocks.js';
 
 /*
  * Minecraft-style per-voxel block light.
@@ -50,18 +51,13 @@ function scanChunkSources(cx, cz) {
             for (let y = 0; y < H; y++) {
                 const cell = col[y];
                 const b = cell && cell.block;
-                if (!b || b.indexOf('_glowing_') < 0) continue;
-                const parts = b.split('_');
-                const hex = parts[parts.length - 2];
-                const intensity = parseFloat(parts[parts.length - 1]) || 1;
-                _c.set('#' + hex).convertSRGBToLinear();
-                // Constant hue: normalise colour to peak 1 (only intensity fades,
-                // never the hue). `radius` is a ROUND (euclidean) reach in blocks.
-                const peak = Math.max(_c.r, _c.g, _c.b, 1e-4);
+                const light = b ? getBlockLight(b) : null;
+                if (!light || light.radius === undefined) continue;
+                _c.set(light.color).convertSRGBToLinear();
                 list.push({
                     x: baseX + lx, y, z: baseZ + lz,
-                    r: _c.r / peak, g: _c.g / peak, b: _c.b / peak,
-                    radius: Math.min(RADIUS_MAX, intensity * 2.6),
+                    r: _c.r, g: _c.g, b: _c.b,
+                    radius: Math.min(RADIUS_MAX, light.radius),
                 });
             }
         }
@@ -103,7 +99,7 @@ const NB = [
 
 // Light passes through air, water and flowers ('f'...); solid blocks stop it.
 function transparent(wb) {
-    return wb === 'air' || wb === 'water' || wb.charCodeAt(0) === 102;
+    return isTransparentForBlockLight(wb);
 }
 
 const _out = [0, 0, 0];

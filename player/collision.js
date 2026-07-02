@@ -1,5 +1,22 @@
 import { getBlockAt } from '../world/terrain_generator.js';
 import { PLAYER_CONFIG } from '../config.js';
+import { isBreakableBlock, isCollidableBlock, getSelectionBox } from '../data/blocks.js';
+
+// Ray vs AABB (slab method). Returns the entry distance along a NORMALISED dir,
+// or -1 if the ray misses the box.
+function rayBoxEntry(ox, oy, oz, dx, dy, dz, minx, miny, minz, maxx, maxy, maxz) {
+    let t0 = 0, t1 = Infinity;
+    // X
+    if (Math.abs(dx) < 1e-8) { if (ox < minx || ox > maxx) return -1; }
+    else { let a = (minx - ox) / dx, b = (maxx - ox) / dx; if (a > b) { const s = a; a = b; b = s; } t0 = Math.max(t0, a); t1 = Math.min(t1, b); }
+    // Y
+    if (Math.abs(dy) < 1e-8) { if (oy < miny || oy > maxy) return -1; }
+    else { let a = (miny - oy) / dy, b = (maxy - oy) / dy; if (a > b) { const s = a; a = b; b = s; } t0 = Math.max(t0, a); t1 = Math.min(t1, b); }
+    // Z
+    if (Math.abs(dz) < 1e-8) { if (oz < minz || oz > maxz) return -1; }
+    else { let a = (minz - oz) / dz, b = (maxz - oz) / dz; if (a > b) { const s = a; a = b; b = s; } t0 = Math.max(t0, a); t1 = Math.min(t1, b); }
+    return t0 <= t1 ? t0 : -1;
+}
 
 /*
  * Voxel collision queries for the walking player.
@@ -11,19 +28,12 @@ import { PLAYER_CONFIG } from '../config.js';
 
 /*
  * Is the block at these integer coordinates solid for collision?
- * Water counts as solid for now (per request); the "flower_" billboards do not
- * block movement, so you can walk through grass and flowers.
+ * Collision rules come from the block registry. Water currently collides;
+ * billboard vegetation does not.
  */
 export function isSolidAt(bx, by, bz) {
     const block = getBlockAt(bx, by, bz);
-    return !!block && block !== 'air' && !block.startsWith('flower_');
-}
-
-
-// Is this block a valid target for breaking? Everything except air and water,
-// so grass and flower billboards can be broken just like solid blocks.
-function isBreakable(block) {
-    return !!block && block !== 'air' && block !== 'water';
+    return isCollidableBlock(block);
 }
 
 
@@ -71,8 +81,23 @@ export function raycastVoxel(origin, dir, maxDistance = PLAYER_CONFIG.breakReach
         }
 
         const block = getBlockAt(ix, iy, iz);
-        if (isBreakable(block)) {
-            return { x: ix, y: iy, z: iz, block, px: prevX, py: prevY, pz: prevZ };
+        if (isBreakableBlock(block)) {
+            const box = getSelectionBox(block);
+            if (!box) {
+                // Full cube.
+                return { x: ix, y: iy, z: iz, block, px: prevX, py: prevY, pz: prevZ };
+            }
+            // Plant: only register if the ray actually crosses its short box
+            // (its texture), not the empty space above it — otherwise keep marching.
+            const hw = box.halfWidth;
+            const t0 = rayBoxEntry(
+                origin.x, origin.y, origin.z, dx, dy, dz,
+                ix - hw, iy - 0.5, iz - hw,
+                ix + hw, iy - 0.5 + box.height, iz + hw,
+            );
+            if (t0 >= 0 && t0 <= maxDistance) {
+                return { x: ix, y: iy, z: iz, block, px: prevX, py: prevY, pz: prevZ };
+            }
         }
     }
 

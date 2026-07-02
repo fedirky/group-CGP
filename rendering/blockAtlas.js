@@ -1,6 +1,7 @@
 import * as THREE from '../three.r168.module.js';
 
 import { aoUniforms, injectBlockLight } from '../voxelAO.js';
+import { ATLAS_BLOCKS } from '../data/blocks.js';
 
 /*
  * Texture-array atlas for the common opaque Lambert blocks.
@@ -15,21 +16,7 @@ import { aoUniforms, injectBlockLight } from '../voxelAO.js';
  * NOT atlased and keep their own materials in the renderer.
  */
 
-const TEX = '../resources/texturepacks/default/blocks';
 const TILE = 16; // all default-pack block textures are 16x16
-
-// Order defines the array layer index of each block face.
-const ATLAS_BLOCKS = [
-    { key: 'stone',          color: `${TEX}/stone.png`,          bump: `${TEX}/stone_bump.png` },
-    { key: 'dirt',           color: `${TEX}/dirt.png`,           bump: `${TEX}/dirt_bump.png` },
-    { key: 'grass',          color: `${TEX}/grass_side.png`,     bump: `${TEX}/dirt_bump.png` },
-    { key: 'grass_top',      color: `${TEX}/grass.png`,          bump: `${TEX}/dirt_bump.png` },
-    { key: 'sand',           color: `${TEX}/sand.png`,           bump: `${TEX}/sand_bump.png` },
-    { key: 'oak_log',        color: `${TEX}/oak_log.png`,        bump: `${TEX}/oak_log_bump.png` },
-    { key: 'oak_leaves',     color: `${TEX}/oak_leaves.png`,     bump: `${TEX}/oak_leaves_bump.png` },
-    { key: 'skyroot_log',    color: `${TEX}/skyroot_log.png`,    bump: `${TEX}/skyroot_log_bump.png` },
-    { key: 'skyroot_leaves', color: `${TEX}/skyroot_leaves.png`, bump: `${TEX}/skyroot_leaves_bump.png` },
-];
 
 const LAYER_OF = new Map(ATLAS_BLOCKS.map((b, i) => [b.key, i]));
 
